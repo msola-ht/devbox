@@ -52,7 +52,7 @@ export function AppLayout() {
 
   return (
     <TooltipProvider>
-      <SidebarProvider className="h-svh overflow-hidden">
+      <SidebarProvider defaultOpen={false} className="h-svh overflow-hidden">
         <AppSidebar />
         <SidebarInset className="min-h-0 overflow-hidden">
           <header className="shrink-0 border-b">
