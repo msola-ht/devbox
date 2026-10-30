@@ -11,6 +11,7 @@ import {
   BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb"
 import { Button } from "@/components/ui/button"
+import { ScrollArea } from "@/components/ui/scroll-area"
 import { Separator } from "@/components/ui/separator"
 import {
   SidebarInset,
@@ -78,11 +79,11 @@ export function AppLayout() {
               </div>
             </div>
           </header>
-          <div className="min-h-0 flex-1 [scrollbar-width:none] overflow-y-auto [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
+          <ScrollArea className="min-h-0 flex-1">
             <div className="flex min-h-full w-full flex-col p-4 md:p-6">
               <Outlet />
             </div>
-          </div>
+          </ScrollArea>
         </SidebarInset>
       </SidebarProvider>
     </TooltipProvider>

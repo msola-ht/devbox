@@ -17,7 +17,6 @@ export function DashboardPage() {
     <Page>
       <section className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div className="space-y-2">
-          <p className="text-sm font-medium text-muted-foreground">概览</p>
           <h1 className="font-heading text-3xl font-semibold tracking-tight">
             本机工具链
           </h1>

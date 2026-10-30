@@ -57,7 +57,8 @@ main.tsx
 | `contracts.ts` | `EnvironmentSnapshot`，与 Rust DTO 字段一一对应 |
 | `api.ts` | 调用 `get_environment` 的模块适配 |
 | `hooks/use-environment.ts` | 创建模块级快照 store |
-| `components/environment-summary.tsx` | 展示 OS、架构、用户目录、`.devbox` 路径和目录状态 |
+| `model.ts` | 系统信息的纯展示转换与容量格式化 |
+| `components/environment-summary.tsx` | 展示 OS 版本、架构、内存、主目录所在卷容量和 GPU |
 | `index.ts` | 模块公开出口 |
 
 ### `features/toolchain`

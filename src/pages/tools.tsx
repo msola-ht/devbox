@@ -72,9 +72,17 @@ export function ToolsPage() {
         </CardHeader>
         <CardContent>
           {environment.state.data ? (
-            <p className="font-mono text-xs leading-5 break-all">
-              {environment.state.data.devboxRoot}
-            </p>
+            <div className="flex flex-col gap-1">
+              <p className="font-mono text-xs leading-5 break-all">
+                {environment.state.data.devboxRoot}
+              </p>
+              {environment.state.data.devboxError ? (
+                <p className="flex items-start gap-1 text-xs break-words text-destructive">
+                  <TriangleAlertIcon className="size-3.5 shrink-0" />
+                  {environment.state.data.devboxError}
+                </p>
+              ) : null}
+            </div>
           ) : environment.state.error ? (
             <p className="flex items-center gap-1 text-xs text-destructive">
               <TriangleAlertIcon className="size-3.5" />

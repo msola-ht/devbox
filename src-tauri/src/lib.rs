@@ -4,7 +4,9 @@ mod modules;
 mod state;
 
 use infrastructure::path::{DevboxLayout, devbox_root, ensure_layout};
-use modules::environment::{EnvironmentInfo, EnvironmentService};
+use modules::environment::{
+  EnvironmentInfo, EnvironmentService, detect_system_profile,
+};
 use modules::toolchain::{PluginRegistry, PythonPlugin, ToolchainService, UvPlugin};
 use state::AppState;
 use tauri::Manager;
@@ -37,9 +39,25 @@ pub fn run() {
         )?;
       }
 
+      let profile = tauri::async_runtime::block_on(detect_system_profile(&home_dir));
+      log::info!(
+        "系统信息: version={:?} build={:?} memory_total={:?} disk_total={:?} gpu={:?} gpu_cores={:?}",
+        profile.os_version,
+        profile.os_build,
+        profile.memory_total_bytes,
+        profile.disk_total_bytes,
+        profile.gpu_name,
+        profile.gpu_core_count
+      );
       let environment = EnvironmentService::new(EnvironmentInfo {
         os: std::env::consts::OS.to_string(),
+        os_version: profile.os_version,
+        os_build: profile.os_build,
         arch: std::env::consts::ARCH.to_string(),
+        memory_total_bytes: profile.memory_total_bytes,
+        disk_total_bytes: profile.disk_total_bytes,
+        gpu_name: profile.gpu_name,
+        gpu_core_count: profile.gpu_core_count,
         home_dir: home_dir.clone(),
         devbox_root: root.clone(),
         devbox_ready: devbox_error.is_none(),

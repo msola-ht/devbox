@@ -28,26 +28,30 @@ main.rs
 | [lib.rs](src/lib.rs) | 唯一组合根：初始化目录、日志、服务、插件、状态和 command |
 | [state.rs](src/state.rs) | 保存 `bootId` 和已组装服务；业务缓存归所属服务 |
 | [ipc/](src/ipc) | command 边界、响应 DTO 和错误 DTO |
-| [modules/environment/](src/modules/environment) | 启动时固定的 OS、架构、用户目录和 `.devbox` 状态 |
+| [modules/environment/](src/modules/environment) | 启动时固定的 OS、硬件规格、用户目录和 `.devbox` 状态 |
 | [modules/toolchain/](src/modules/toolchain) | 工具模型、检测应用服务、快照缓存、类型化错误、插件契约和注册表 |
 | [infrastructure/path.rs](src/infrastructure/path.rs) | `.devbox` 布局、权限和目录安全校验 |
 | [infrastructure/process.rs](src/infrastructure/process.rs) | 受控版本命令执行、超时和输出上限 |
+
+系统规格在应用启动时检测一次；当前 macOS 覆盖版本、内存、卷容量和 GPU，Linux 覆盖版本、内存和容量，Windows 仅覆盖版本。未实现的字段以 `null` 返回。
 
 ## IPC 契约
 
 | command | 当前行为 |
 | --- | --- |
-| `get_environment` | 返回当前进程的 `bootId`、固定环境 revision、OS、架构、用户目录、`.devbox` 路径和目录状态 |
+| `get_environment` | 返回启动时检测的 `bootId`、OS 版本、架构、内存、主目录所在卷容量、GPU、用户目录、`.devbox` 路径和目录状态 |
 | `list_tools` | 调用工具链服务；已有缓存时返回权威快照，无缓存时执行检测并缓存 |
 | `refresh_tools` | 调用工具链服务重新检测并分配新 revision |
 
 当前快照 DTO：
 
-- `EnvironmentSnapshot`：`bootId`、`revision`、`generatedAt`、`os`、`arch`、`homeDir`、`devboxRoot`、`devboxReady`、`devboxError`。
+- `EnvironmentSnapshot`：`bootId`、`revision`、`generatedAt`、`os`、`osVersion`、`osBuild`、`arch`、`homeDir`、`devboxRoot`、`devboxReady`、`devboxError`、`memoryTotalBytes`、`diskTotalBytes`、`gpuName`、`gpuCoreCount`。
 - `ToolListSnapshot`：`bootId`、`revision`、`generatedAt`、`tools`。
 - `ToolSummary`：`toolId`、`displayName`、`description`、`pluginContractVersion`、系统安装、托管安装和 active 安装 ID。
 - `InstallationSummary`：`installationId`、`version`、`path`、`source`、`sourceHint`、`healthy`、`errorCode`。
 - `IpcError`：稳定 `code`、可展示 `message` 和可选 `details`。
+
+环境快照在启动时固定，`revision` 为 `"1"`；工具链快照的 `revision` 随检测递增。
 
 JSON 字段为 camelCase；标识符、revision 和契约版本以字符串传输；时间使用 UTC RFC 3339。Rust 当前没有自动生成 TypeScript 类型，`src/features/**/contracts.ts` 由人工保持一一对应。
 
