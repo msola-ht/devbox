@@ -28,6 +28,29 @@ impl ToolPlugin for PythonPlugin {
     }
   }
 
+  fn preferred_directories(&self, _environment: &ToolPluginContext<'_>) -> Vec<PathBuf> {
+    let mut directories = Vec::new();
+
+    for variable in ["VIRTUAL_ENV", "CONDA_PREFIX"] {
+      let Some(root) = std::env::var_os(variable).map(PathBuf::from) else {
+        continue;
+      };
+      if !root.is_absolute() {
+        continue;
+      }
+
+      #[cfg(windows)]
+      {
+        directories.push(root.clone());
+        directories.push(root.join("Scripts"));
+      }
+      #[cfg(not(windows))]
+      directories.push(root.join("bin"));
+    }
+
+    directories
+  }
+
   fn known_directories(&self, environment: &ToolPluginContext<'_>) -> Vec<PathBuf> {
     match environment.os {
       "macos" => vec![
@@ -83,6 +106,8 @@ impl ToolPlugin for PythonPlugin {
       Some("pyenv".to_string())
     } else if path.contains("/.local/share/uv/python/") {
       Some("uv 管理".to_string())
+    } else if path.contains("/miniconda") || path.contains("/anaconda") {
+      Some("Conda 虚拟环境".to_string())
     } else if path.contains("/opt/homebrew/")
       || path.contains("/usr/local/Cellar/")
       || path.contains("/home/linuxbrew/")
@@ -90,7 +115,10 @@ impl ToolPlugin for PythonPlugin {
       Some("Homebrew".to_string())
     } else if path.starts_with("/usr/bin/") || path.starts_with("/bin/") {
       Some("系统 Python".to_string())
-    } else if path.contains("/.venv/") || path.contains("/venv/") {
+    } else if path.contains("/.venv/")
+      || path.contains("/venv/")
+      || path.contains("/.virtualenvs/")
+    {
       Some("虚拟环境".to_string())
     } else if path.contains("/.local/") {
       Some("用户安装".to_string())

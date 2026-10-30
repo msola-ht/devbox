@@ -2,7 +2,7 @@
 
 [文档索引](../docs/README.md) · [架构设计](../docs/architecture.md) · [后端规则](AGENTS.md) · [前端模块说明](../src/README.md) · [开发指南](../docs/development.md)
 
-本文描述当前 Rust 与 Tauri 实现。当前后端提供 `.devbox` 初始化、环境快照、uv 与 Python 系统检测、托管安装扫描、工具快照缓存、代理设置持久化和连接测试；安装、任务、完整持久化迁移和业务事件按开发指南的实施顺序进入后端模块。
+本文描述当前 Rust 与 Tauri 实现。当前后端提供 `.devbox` 初始化、环境快照、uv、Python、Node.js、npm、pnpm、Git、Bash 与 Zsh 系统检测、托管安装扫描、工具快照缓存、代理设置持久化和连接测试；安装、任务、完整持久化迁移和业务事件按开发指南的实施顺序进入后端模块。
 
 ## 启动与组合
 
@@ -16,7 +16,7 @@ main.rs
         log -> ~/.devbox/logs
         EnvironmentService
         SettingsService -> config.json
-        PluginRegistry(UvPlugin, PythonPlugin) + DevboxLayout + ToolchainService
+        PluginRegistry(8 个工具插件) + DevboxLayout + ToolchainService
         manage(AppState)
       invoke_handler
         get_environment / get_settings / update_settings / test_proxy
@@ -37,7 +37,7 @@ main.rs
 | [infrastructure/process.rs](src/infrastructure/process.rs) | 受控版本命令执行、超时和输出上限 |
 | [infrastructure/network/](src/infrastructure/network) | 读取系统与环境代理，并根据系统、直连或手动代理路由构建 HTTPS 客户端 |
 
-系统规格在应用启动时检测一次；当前 macOS 覆盖版本、内存、卷容量和 GPU，Linux 覆盖版本、内存和容量，Windows 仅覆盖版本。未实现的字段以 `null` 返回。
+系统规格在应用启动时检测一次；当前 macOS 覆盖版本、内存、卷容量、GPU 和账户默认 Shell，Linux 覆盖版本、内存、容量和账户默认 Shell，Windows 仅覆盖版本。默认 Shell 在 macOS 从用户账户记录读取，不依赖启动应用的交互 Shell 环境。Rust 随后通过默认 Bash/Zsh 的登录环境读取 PATH，用于解析每个工具当前生效的系统安装。未实现的字段以 `null` 返回。
 
 ## IPC 契约
 
@@ -52,9 +52,9 @@ main.rs
 
 当前快照 DTO：
 
-- `EnvironmentSnapshot`：`bootId`、`revision`、`generatedAt`、`os`、`osVersion`、`osBuild`、`arch`、`homeDir`、`devboxRoot`、`devboxReady`、`devboxError`、`memoryTotalBytes`、`diskTotalBytes`、`gpuName`、`gpuCoreCount`。
+- `EnvironmentSnapshot`：`bootId`、`revision`、`generatedAt`、`os`、`osVersion`、`osBuild`、`arch`、`homeDir`、`devboxRoot`、`devboxReady`、`devboxError`、`memoryTotalBytes`、`diskTotalBytes`、`gpuName`、`gpuCoreCount`、`defaultShell`。
 - `ToolListSnapshot`：`bootId`、`revision`、`generatedAt`、`tools`。
-- `ToolSummary`：`toolId`、`displayName`、`description`、`pluginContractVersion`、系统安装、托管安装和 active 安装 ID。
+- `ToolSummary`：`toolId`、`displayName`、`description`、`pluginContractVersion`、系统安装、托管安装、active 安装 ID 和 `currentInstallationId`。
 - `InstallationSummary`：`installationId`、`version`、`path`、`source`、`sourceHint`、`healthy`、`errorCode`。
 - `SettingsSnapshot`：`bootId`、`revision`、`generatedAt`、`proxy` 和 `systemProxy`。
 - `ProxySettings`：`system`、`direct`，或带 `protocol`、`host`、`port`、`bypass` 的 `manual`。
@@ -78,14 +78,15 @@ JSON 字段为 camelCase；标识符、revision 和契约版本以字符串传�
 | --- | --- |
 | `descriptor` | 稳定 `toolId`、显示名、说明和契约版本 |
 | `executableNames` | 平台相关可执行文件名 |
+| `preferredDirectories` | 登录 PATH 不可用时回退检查的显式环境目录 |
 | `knownDirectories` | 插件声明的常见绝对目录 |
 | `versionArgs` | 版本探测参数 |
 | `parseVersionOutput` | 工具专有输出解析 |
 | `sourceHint` | 根据规范路径生成来源提示 |
 
-`lib.rs` 显式创建 `PluginRegistry` 并注册 `UvPlugin`、`PythonPlugin`；插件接收 OS、用户目录等最小探测上下文，而不依赖完整环境模型。通用服务负责 PATH 合并、路径规范化与去重、只读进程探测、清单读取和领域摘要，IPC 边界再映射响应 DTO。服务不包含 uv 或 Python 的输出解析规则。
+`lib.rs` 显式创建 `PluginRegistry` 并注册 `UvPlugin`、`PythonPlugin`、`NodePlugin`、`NpmPlugin`、`PnpmPlugin`、`GitPlugin`、`BashPlugin` 和 `ZshPlugin`；插件接收 OS、用户目录和默认 Shell 登录 PATH 等最小探测上下文，而不依赖完整环境模型。通用服务按登录 PATH 顺序选择每个工具的第一个可执行文件，负责路径规范化、只读进程探测、清单读取、当前安装判定和领域摘要，IPC 边界再映射响应 DTO。服务不包含具体工具的版本输出解析规则。
 
-Python 提供系统解释器检测。版本目录、安装、验证和激活通过后续插件能力与 `operations` 服务接入；`operations` 只使用 `toolchain` 公开的能力接口。
+Python 的当前解释器同样由登录 PATH 决定，来源提示区分虚拟环境与 Conda；只有无法取得默认 Shell 登录 PATH 时才回退到显式环境和常见目录。Bash、Zsh 使用账户记录中的默认 Shell 路径，其他 Shell 不产生当前系统安装。版本目录、安装、验证和激活通过后续插件能力与 `operations` 服务接入；`operations` 只使用 `toolchain` 公开的能力接口。
 
 ## 用户目录与状态
 
@@ -114,7 +115,7 @@ Python 提供系统解释器检测。版本目录、安装、验证和激活通�
 - `bootId` 在每次 Rust 进程启动时生成。
 - 工具链 revision 和最新快照缓存归 `ToolchainService`，revision 在检测开始时分配并在进程内单调递增。
 - 并发刷新不会让较低 revision 覆盖已缓存的较高 revision。
-- 系统安装候选发现和托管安装扫描通过 `spawn_blocking` 脱离异步执行器，避免阻塞文件操作占住 Tokio 工作线程。
+- 当前系统安装发现和托管安装扫描通过 `spawn_blocking` 脱离异步执行器，避免阻塞文件操作占住 Tokio 工作线程。
 - 系统代理读取通过 `spawn_blocking` 执行；设置服务将网络适配结果转换为设置模块模型，IPC 不依赖基础设施类型。
 - 设置更新由单一写入线程串行完成版本检查、重新验证和文件写入；锁只保护短时内存快照，`expectedRevision` 阻止旧窗口覆盖新设置。
 - 前端快照 Store 合并同一业务查询；Rust 单飞探测、任务注册表和跨进程锁随操作服务建立。
@@ -123,7 +124,8 @@ Python 提供系统解释器检测。版本目录、安装、验证和激活通�
 ## 日志与安全边界
 
 - 日志插件在 `.devbox` 初始化成功后启用，目标为 `.devbox/logs/devbox.log`，单文件上限 10 MiB。
-- 版本命令使用绝对可执行路径和参数数组，不使用 Shell；清空环境后仅保留 Windows 运行所需的最小系统变量。
+- 版本命令使用绝对可执行路径和参数数组，不使用 Shell；清空环境后仅保留绝对 PATH 条目以及 Windows 运行所需的最小系统变量，使 npm/pnpm 等 Node.js 启动脚本能够解析解释器，同时避免从相对目录执行同名程序。
+- 读取默认 Shell 登录 PATH 时会执行该 Shell 的固定 `-l -c` 打印命令，因此会加载用户的登录启动文件；该命令不接收前端输入，并有 5 秒超时和输出上限。
 - 版本探测有 3 秒超时、stdout/stderr 各 64 KiB 上限，并终止直接子进程。
 - PATH 中的相对目录会被跳过，避免执行当前工作目录中的同名程序。
 - 系统模式使用 reqwest 读取操作系统静态 HTTP/HTTPS 代理，Linux 无统一系统代理时使用代理环境变量；设置快照使用同一代理匹配器返回实际生效路由，按最终选中路由的地址与认证信息区分环境变量与系统设置来源，并只暴露脱敏 URL 和认证需求。直连和手动模式显式关闭自动代理，手动路由只使用保存的主机和端口。目的地强制 HTTPS，重定向最多 5 次。

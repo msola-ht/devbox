@@ -23,6 +23,7 @@ pub struct EnvironmentSnapshot {
   disk_total_bytes: Option<u64>,
   gpu_name: Option<String>,
   gpu_core_count: Option<u32>,
+  default_shell: Option<String>,
 }
 
 #[tauri::command]
@@ -45,5 +46,6 @@ pub fn get_environment(state: State<'_, AppState>) -> Result<EnvironmentSnapshot
     disk_total_bytes: info.disk_total_bytes,
     gpu_name: info.gpu_name.clone(),
     gpu_core_count: info.gpu_core_count,
+    default_shell: info.default_shell.clone(),
   })
 }

@@ -27,6 +27,7 @@ struct ToolSummaryDto {
   system_installations: Vec<InstallationSummaryDto>,
   managed_installations: Vec<InstallationSummaryDto>,
   active_installation_id: Option<String>,
+  current_installation_id: Option<String>,
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -97,6 +98,7 @@ impl From<&ToolSummary> for ToolSummaryDto {
         .map(InstallationSummaryDto::from)
         .collect(),
       active_installation_id: tool.active_installation_id.clone(),
+      current_installation_id: tool.current_installation_id.clone(),
     }
   }
 }

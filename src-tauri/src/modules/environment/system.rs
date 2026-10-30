@@ -1,9 +1,13 @@
-use std::path::Path;
+use std::ffi::OsStr;
+use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use crate::infrastructure::process::probe_version;
 
 const PROBE_TIMEOUT: Duration = Duration::from_secs(2);
+const LOGIN_SHELL_TIMEOUT: Duration = Duration::from_secs(5);
+const LOGIN_PATH_BEGIN: &str = "__DEVBOX_LOGIN_PATH_BEGIN__";
+const LOGIN_PATH_END: &str = "__DEVBOX_LOGIN_PATH_END__";
 
 #[derive(Clone, Debug, Default)]
 pub struct SystemProfile {
@@ -13,6 +17,8 @@ pub struct SystemProfile {
   pub disk_total_bytes: Option<u64>,
   pub gpu_name: Option<String>,
   pub gpu_core_count: Option<u32>,
+  pub default_shell: Option<String>,
+  pub login_shell_path: Vec<PathBuf>,
 }
 
 pub async fn detect_system_profile(home_dir: &Path) -> SystemProfile {
@@ -20,12 +26,19 @@ pub async fn detect_system_profile(home_dir: &Path) -> SystemProfile {
   let os = tokio::spawn(detect_os_version());
   let gpu = tokio::spawn(detect_gpu());
   let memory = tokio::spawn(detect_memory_total());
+  let shell_home = home_dir.clone();
+  let default_shell = tokio::spawn(detect_default_shell(shell_home));
   let disk = tokio::spawn(async move { detect_disk_total(&home_dir).await });
 
   let (os_version, os_build) = os.await.unwrap_or((None, None));
   let memory_total_bytes = memory.await.ok().flatten();
   let disk_total_bytes = disk.await.ok().flatten();
   let (gpu_name, gpu_core_count) = gpu.await.unwrap_or((None, None));
+  let default_shell = default_shell.await.ok().flatten();
+  let login_shell_path = match default_shell.as_deref() {
+    Some(shell) => detect_login_shell_path(Path::new(shell)).await,
+    None => Vec::new(),
+  };
 
   SystemProfile {
     os_version,
@@ -34,6 +47,8 @@ pub async fn detect_system_profile(home_dir: &Path) -> SystemProfile {
     disk_total_bytes,
     gpu_name,
     gpu_core_count,
+    default_shell,
+    login_shell_path,
   }
 }
 
@@ -45,6 +60,97 @@ async fn probe(program: &str, args: &[&str]) -> Option<String> {
       None
     }
   }
+}
+
+async fn detect_login_shell_path(shell: &Path) -> Vec<PathBuf> {
+  let Some(shell_name) = shell.file_name().and_then(OsStr::to_str) else {
+    return Vec::new();
+  };
+  if !shell.is_absolute()
+    || !matches!(
+      shell_name.trim_end_matches(".exe"),
+      "bash" | "zsh"
+    )
+  {
+    return Vec::new();
+  }
+
+  let script = format!(
+    "printf '\\n{LOGIN_PATH_BEGIN}%s{LOGIN_PATH_END}\\n' \"$PATH\""
+  );
+  let output = match probe_version(
+    shell,
+    &["-l", "-c", script.as_str()],
+    LOGIN_SHELL_TIMEOUT,
+  )
+  .await
+  {
+    Ok(output) => output,
+    Err(_) => {
+      log::warn!("无法读取默认 Shell 登录环境 {}", shell.display());
+      return Vec::new();
+    }
+  };
+
+  let Some(value_start) = output.find(LOGIN_PATH_BEGIN) else {
+    return Vec::new();
+  };
+  let value_start = value_start + LOGIN_PATH_BEGIN.len();
+  let Some(value_end) = output[value_start..].find(LOGIN_PATH_END) else {
+    return Vec::new();
+  };
+  let value = &output[value_start..value_start + value_end];
+
+  std::env::split_paths(OsStr::new(value))
+    .filter(|path| path.is_absolute())
+    .collect()
+}
+
+#[cfg(target_os = "macos")]
+async fn detect_default_shell(home_dir: std::path::PathBuf) -> Option<String> {
+  let home = home_dir.to_string_lossy().to_string();
+  if !home.starts_with('/') {
+    return None;
+  }
+
+  let output = probe(
+    "/usr/bin/dscl",
+    &[".", "-read", home.as_str(), "UserShell"],
+  )
+  .await?;
+  output.lines().find_map(|line| {
+    let shell = line.strip_prefix("UserShell:")?.trim();
+    (shell.starts_with('/') && shell.len() > 1).then(|| shell.to_string())
+  })
+}
+
+#[cfg(target_os = "linux")]
+async fn detect_default_shell(home_dir: std::path::PathBuf) -> Option<String> {
+  tokio::task::spawn_blocking(move || {
+    let contents = std::fs::read_to_string("/etc/passwd").ok()?;
+    contents.lines().find_map(|line| {
+      let mut fields = line.split(':');
+      let (_name, _password, _uid, _gid, _gecos, home, shell) = (
+        fields.next()?,
+        fields.next()?,
+        fields.next()?,
+        fields.next()?,
+        fields.next()?,
+        fields.next()?,
+        fields.next()?,
+      );
+      (home_dir.as_path() == Path::new(home) && shell.starts_with('/') && shell.len() > 1)
+        .then(|| shell.to_string())
+    })
+  })
+  .await
+  .ok()
+  .flatten()
+}
+
+#[cfg(not(any(target_os = "macos", target_os = "linux")))]
+async fn detect_default_shell(_home_dir: std::path::PathBuf) -> Option<String> {
+  None
 }
 
 #[cfg(target_os = "macos")]

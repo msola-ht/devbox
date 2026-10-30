@@ -18,6 +18,7 @@ export interface ToolSummary {
   systemInstallations: InstallationSummary[]
   managedInstallations: InstallationSummary[]
   activeInstallationId: string | null
+  currentInstallationId: string | null
 }
 
 export interface ToolListSnapshot {

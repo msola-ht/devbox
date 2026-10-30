@@ -1,4 +1,3 @@
-use std::collections::BTreeMap;
 use std::fs;
 use std::io::ErrorKind;
 use std::path::{Component, Path, PathBuf};
@@ -15,7 +14,7 @@ use super::model::{
 use super::plugin::{ToolPlugin, ToolPluginContext};
 use super::plugins::PluginRegistry;
 use crate::infrastructure::path::DevboxLayout;
-use crate::infrastructure::process::probe_version;
+use crate::infrastructure::process::probe_version_with_path;
 use crate::modules::environment::EnvironmentInfo;
 
 const VERSION_PROBE_TIMEOUT: Duration = Duration::from_secs(3);
@@ -109,6 +108,8 @@ impl ToolchainService {
     let context = ToolPluginContext {
       os: &environment.os,
       home_dir: &environment.home_dir,
+      login_shell_path: &environment.login_shell_path,
+      default_shell: environment.default_shell.as_deref(),
     };
 
     for plugin in self.registry.plugins() {
@@ -123,6 +124,11 @@ impl ToolchainService {
           .iter()
           .any(|installation| installation.installation_id == *active && installation.healthy)
       });
+      summary.current_installation_id = summary
+        .system_installations
+        .first()
+        .map(|installation| installation.installation_id.clone())
+        .or_else(|| summary.active_installation_id.clone());
       tools.push(summary);
     }
 
@@ -134,60 +140,78 @@ impl ToolchainService {
     plugin: &dyn ToolPlugin,
     environment: &ToolPluginContext<'_>,
   ) -> Result<Vec<InstallationSummary>, ToolchainError> {
-    let mut installations = Vec::new();
+    let Some((canonical, display_path)) = self.current_system_candidate(plugin, environment).await?
+    else {
+      return Ok(Vec::new());
+    };
+    let source_hint = plugin.source_hint(&display_path);
+    let probe = probe_version_with_path(
+      &display_path,
+      plugin.version_args(),
+      VERSION_PROBE_TIMEOUT,
+      Some(environment.login_shell_path),
+    )
+    .await;
 
-    for (canonical, display_path) in self.system_candidates(plugin, environment).await? {
-      let source_hint = plugin.source_hint(Path::new(&canonical));
-      let probe = probe_version(&display_path, plugin.version_args(), VERSION_PROBE_TIMEOUT).await;
-
-      match probe {
-        Ok(output) => {
-          let version = plugin.parse_version_output(&output);
-          let healthy = version.is_some();
-          installations.push(InstallationSummary {
-            installation_id: format!("system:{canonical}"),
-            version,
-            path: display_path.to_string_lossy().to_string(),
-            source: InstallationSource::System,
-            source_hint,
-            healthy,
-            error_code: (!healthy).then(|| "VERSION_OUTPUT_UNRECOGNIZED".to_string()),
-          });
-        }
-        Err(error) => {
-          log::warn!(
-            "{} system probe failed for {}: {error}",
-            plugin.descriptor().tool_id,
-            display_path.display()
-          );
-          installations.push(InstallationSummary {
-            installation_id: format!("system:{canonical}"),
-            version: None,
-            path: display_path.to_string_lossy().to_string(),
-            source: InstallationSource::System,
-            source_hint,
-            healthy: false,
-            error_code: Some("SYSTEM_PROBE_FAILED".to_string()),
-          });
+    let installation = match probe {
+      Ok(output) => {
+        let version = plugin.parse_version_output(&output);
+        let healthy = version.is_some();
+        InstallationSummary {
+          installation_id: format!("system:{canonical}"),
+          version,
+          path: display_path.to_string_lossy().to_string(),
+          source: InstallationSource::System,
+          source_hint,
+          healthy,
+          error_code: (!healthy).then(|| "VERSION_OUTPUT_UNRECOGNIZED".to_string()),
         }
       }
-    }
+      Err(error) => {
+        log::warn!(
+          "{} system probe failed for {}: {error}",
+          plugin.descriptor().tool_id,
+          display_path.display()
+        );
+        InstallationSummary {
+          installation_id: format!("system:{canonical}"),
+          version: None,
+          path: display_path.to_string_lossy().to_string(),
+          source: InstallationSource::System,
+          source_hint,
+          healthy: false,
+          error_code: Some("SYSTEM_PROBE_FAILED".to_string()),
+        }
+      }
+    };
 
-    Ok(installations)
+    Ok(vec![installation])
   }
 
-  async fn system_candidates(
+  async fn current_system_candidate(
     &self,
     plugin: &dyn ToolPlugin,
     environment: &ToolPluginContext<'_>,
-  ) -> Result<Vec<(String, PathBuf)>, ToolchainError> {
-    let mut candidates = BTreeMap::new();
-    let mut directories = Vec::new();
-
-    if let Some(path) = std::env::var_os("PATH") {
-      directories.extend(std::env::split_paths(&path));
+  ) -> Result<Option<(String, PathBuf)>, ToolchainError> {
+    let tool_id = plugin.descriptor().tool_id;
+    if matches!(tool_id, "bash" | "zsh") {
+      let Some(shell) = environment.default_shell.map(PathBuf::from) else {
+        return Ok(None);
+      };
+      if shell.file_stem().and_then(|name| name.to_str()) != Some(tool_id) || !shell.is_file() {
+        return Ok(None);
+      }
+      return Ok(Some((canonical_path(&shell), shell)));
     }
-    directories.extend(plugin.known_directories(environment));
+
+    let mut directories = environment.login_shell_path.to_vec();
+    if directories.is_empty() {
+      directories.extend(plugin.preferred_directories(environment));
+      if let Some(path) = std::env::var_os("PATH") {
+        directories.extend(std::env::split_paths(&path));
+      }
+      directories.extend(plugin.known_directories(environment));
+    }
     let executables = plugin.executable_names().to_vec();
 
     tokio::task::spawn_blocking(move || {
@@ -202,19 +226,15 @@ impl ToolchainService {
             continue;
           }
 
-          let canonical = fs::canonicalize(&candidate)
-            .unwrap_or_else(|_| candidate.clone())
-            .to_string_lossy()
-            .to_string();
-          candidates.entry(canonical).or_insert(candidate);
+          return Some((canonical_path(&candidate), candidate));
         }
       }
 
-      candidates.into_iter().collect()
+      None
     })
     .await
     .map_err(|error| ToolchainError::BlockingTaskFailed {
-      operation: "系统安装候选发现",
+      operation: "当前系统安装发现",
       message: error.to_string(),
     })
   }
@@ -237,6 +257,13 @@ impl ToolchainService {
       message: error.to_string(),
     })?
   }
+}
+
+fn canonical_path(path: &Path) -> String {
+  fs::canonicalize(path)
+    .unwrap_or_else(|_| path.to_path_buf())
+    .to_string_lossy()
+    .to_string()
 }
 
 fn scan_managed_installations(

@@ -14,4 +14,5 @@ export interface EnvironmentSnapshot {
   diskTotalBytes: number | null
   gpuName: string | null
   gpuCoreCount: number | null
+  defaultShell: string | null
 }

@@ -1,3 +1,4 @@
+use std::ffi::OsString;
 use std::fmt;
 use std::path::Path;
 use std::process::Stdio;
@@ -35,6 +36,15 @@ pub async fn probe_version(
   args: &[&str],
   command_timeout: Duration,
 ) -> Result<String, VersionProbeError> {
+  probe_version_with_path(executable, args, command_timeout, None).await
+}
+
+pub async fn probe_version_with_path(
+  executable: &Path,
+  args: &[&str],
+  command_timeout: Duration,
+  search_path: Option<&[std::path::PathBuf]>,
+) -> Result<String, VersionProbeError> {
   let mut command = Command::new(executable);
   command
     .args(args)
@@ -42,7 +52,7 @@ pub async fn probe_version(
     .stdout(Stdio::piped())
     .stderr(Stdio::piped())
     .kill_on_drop(true);
-  configure_environment(&mut command);
+  configure_environment(&mut command, search_path);
 
   let mut child = command
     .spawn()
@@ -101,8 +111,15 @@ pub async fn probe_version(
   Ok(String::from_utf8_lossy(&output).trim().to_string())
 }
 
-fn configure_environment(command: &mut Command) {
+fn configure_environment(command: &mut Command, search_path: Option<&[std::path::PathBuf]>) {
   command.env_clear();
+
+  if let Some(path) = search_path
+    .and_then(paths_to_search_path)
+    .or_else(sanitized_path)
+  {
+    command.env("PATH", path);
+  }
 
   #[cfg(windows)]
   for variable in [
@@ -120,6 +137,19 @@ fn configure_environment(command: &mut Command) {
       command.env(variable, value);
     }
   }
+}
+
+fn paths_to_search_path(paths: &[std::path::PathBuf]) -> Option<OsString> {
+  if paths.is_empty() {
+    return None;
+  }
+  std::env::join_paths(paths.iter().filter(|path| path.is_absolute())).ok()
+}
+
+fn sanitized_path() -> Option<OsString> {
+  let path = std::env::var_os("PATH")?;
+  let directories = std::env::split_paths(&path).filter(|path| path.is_absolute());
+  std::env::join_paths(directories).ok()
 }
 
 async fn read_limited<R>(reader: R) -> std::io::Result<(Vec<u8>, bool)>

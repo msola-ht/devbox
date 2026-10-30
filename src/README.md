@@ -58,7 +58,7 @@ main.tsx
 | `api.ts` | 调用 `get_environment` 的模块适配 |
 | `hooks/use-environment.ts` | 创建模块级快照 store |
 | `model.ts` | 系统信息的纯展示转换与容量格式化 |
-| `components/environment-summary.tsx` | 展示 OS 版本、架构、内存、主目录所在卷容量和 GPU |
+| `components/environment-summary.tsx` | 展示 OS 版本、架构、内存、主目录所在卷容量、GPU 和账户默认 Shell |
 | `index.ts` | 模块公开出口 |
 
 ### `features/toolchain`
@@ -69,11 +69,11 @@ main.tsx
 | `api.ts` | 初次查询使用 `list_tools`，显式刷新使用 `refresh_tools` |
 | `hooks/use-toolchain.ts` | 创建模块级快照 store |
 | `model.ts` | 派生工具总体状态、active 安装判断和安装项展示键 |
-| `components/tool-summary-card.tsx` | 展示插件返回的说明、系统/托管安装、健康状态和 active 标记 |
+| `components/tool-summary-card.tsx` | 只展示当前安装，以及插件返回的说明、健康状态和 active 标记 |
 | `components/toolchain-empty-state.tsx` | 展示成功返回但没有注册工具时的空状态 |
 | `index.ts` | 模块公开出口 |
 
-工具名称、说明和契约版本来自 Rust 插件 DTO；前端没有针对 uv 或 Python 的检测分支。新增工具检测只需在 Rust 注册表接入插件，通用工具列表自动展示。
+工具名称、说明和契约版本来自 Rust 插件 DTO；前端没有针对具体工具的检测分支。每张工具卡只展示 `currentInstallationId` 指向的当前安装，Shell 卡片再按账户默认 Shell 过滤。Python 虚拟环境通过安装项的来源提示区分。新增工具检测只需在 Rust 注册表接入插件，通用工具列表自动展示。
 
 ### `features/settings`
 

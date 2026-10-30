@@ -34,6 +34,7 @@ pub struct ToolSummary {
   pub system_installations: Vec<InstallationSummary>,
   pub managed_installations: Vec<InstallationSummary>,
   pub active_installation_id: Option<String>,
+  pub current_installation_id: Option<String>,
 }
 
 impl ToolSummary {
@@ -46,6 +47,7 @@ impl ToolSummary {
       system_installations: Vec::new(),
       managed_installations: Vec::new(),
       active_installation_id: None,
+      current_installation_id: None,
     }
   }
 }

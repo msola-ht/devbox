@@ -7,3 +7,4 @@ export type {
   ToolSummary,
 } from "@/features/toolchain/contracts"
 export { useToolchain } from "@/features/toolchain/hooks/use-toolchain"
+export { filterToolsForDefaultShell } from "@/features/toolchain/model"

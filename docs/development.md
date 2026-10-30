@@ -34,7 +34,7 @@ DashboardPage / ToolsPage
   → getEnvironment / listTools / refreshTools
   → get_environment / list_tools / refresh_tools
   → EnvironmentService / ToolchainService
-  → uv 与 Python 检测插件
+  → uv、Python、Node.js、npm、pnpm、Git、Bash 与 Zsh 检测插件
   → DevboxLayout / probe_version
 
 SettingsPage
@@ -87,12 +87,13 @@ lib.rs → all composition
 | --- | --- |
 | `descriptor` | 稳定工具 ID、显示名称、说明和契约版本 |
 | `executable_names` | 平台相关可执行文件名 |
+| `preferred_directories` | 登录 PATH 不可用时回退检查的显式环境目录，例如当前 Python 虚拟环境 |
 | `known_directories` | 工具常见安装目录 |
 | `version_args` | 版本探测参数 |
 | `parse_version_output` | 工具专有版本输出解析 |
 | `source_hint` | 来源提示 |
 
-`lib.rs` 组合 `UvPlugin` 和 `PythonPlugin`。工具名称、平台目录、版本解析和来源提示归插件；PATH 合并、路径规范化、去重、进程探测、托管清单扫描、快照缓存和 revision 归工具链服务。
+`lib.rs` 组合 `UvPlugin`、`PythonPlugin`、`NodePlugin`、`NpmPlugin`、`PnpmPlugin`、`GitPlugin`、`BashPlugin` 和 `ZshPlugin`。工具名称、平台目录、版本解析和来源提示归插件；默认 Shell 登录 PATH 解析、路径规范化、进程探测、当前安装判定、托管清单扫描、快照缓存和 revision 归工具链服务。只有无法取得登录 PATH 时才回退到 `VIRTUAL_ENV`、`CONDA_PREFIX` 和常见目录。
 
 ## 后续实施顺序
 

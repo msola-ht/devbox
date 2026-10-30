@@ -7,11 +7,19 @@ import {
 } from "@/components/query-state-card"
 import { RefreshButton } from "@/components/refresh-button"
 import { EnvironmentSummary } from "@/features/environment"
-import { ToolchainEmptyState, ToolSummaryCard } from "@/features/toolchain"
+import {
+  filterToolsForDefaultShell,
+  ToolchainEmptyState,
+  ToolSummaryCard,
+} from "@/features/toolchain"
 
 export function DashboardPage() {
   const { environment, toolchain, loading, refreshAll } =
     useToolchainWorkspace()
+  const defaultShell = environment.state.data?.defaultShell ?? null
+  const tools = toolchain.state.data
+    ? filterToolsForDefaultShell(toolchain.state.data.tools, defaultShell)
+    : []
 
   return (
     <Page>
@@ -59,7 +67,7 @@ export function DashboardPage() {
           </div>
           {toolchain.state.data ? (
             <span className="text-xs text-muted-foreground">
-              已检测 {toolchain.state.data.tools.length} 个工具
+              已检测 {tools.length} 个工具
             </span>
           ) : null}
         </div>
@@ -72,10 +80,14 @@ export function DashboardPage() {
         ) : null}
 
         {toolchain.state.data ? (
-          toolchain.state.data.tools.length > 0 ? (
+          tools.length > 0 ? (
             <div className="grid gap-4 lg:grid-cols-2">
-              {toolchain.state.data.tools.map((tool) => (
-                <ToolSummaryCard key={tool.toolId} tool={tool} />
+              {tools.map((tool) => (
+                <ToolSummaryCard
+                  key={tool.toolId}
+                  tool={tool}
+                  defaultShell={defaultShell}
+                />
               ))}
             </div>
           ) : (

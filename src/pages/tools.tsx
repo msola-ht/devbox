@@ -19,11 +19,19 @@ import {
   CardTitle,
 } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
-import { ToolchainEmptyState, ToolSummaryCard } from "@/features/toolchain"
+import {
+  filterToolsForDefaultShell,
+  ToolchainEmptyState,
+  ToolSummaryCard,
+} from "@/features/toolchain"
 
 export function ToolsPage() {
   const { environment, toolchain, loading, refreshAll } =
     useToolchainWorkspace()
+  const defaultShell = environment.state.data?.defaultShell ?? null
+  const tools = toolchain.state.data
+    ? filterToolsForDefaultShell(toolchain.state.data.tools, defaultShell)
+    : []
   const devboxUnavailable = environment.state.data
     ? !environment.state.data.devboxReady
     : environment.state.error !== null
@@ -113,10 +121,14 @@ export function ToolsPage() {
       ) : null}
 
       {toolchain.state.data ? (
-        toolchain.state.data.tools.length > 0 ? (
+        tools.length > 0 ? (
           <div className="grid gap-4 lg:grid-cols-2">
-            {toolchain.state.data.tools.map((tool) => (
-              <ToolSummaryCard key={tool.toolId} tool={tool} />
+            {tools.map((tool) => (
+              <ToolSummaryCard
+                key={tool.toolId}
+                tool={tool}
+                defaultShell={defaultShell}
+              />
             ))}
           </div>
         ) : (

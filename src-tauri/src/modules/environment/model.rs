@@ -10,6 +10,8 @@ pub struct EnvironmentInfo {
   pub disk_total_bytes: Option<u64>,
   pub gpu_name: Option<String>,
   pub gpu_core_count: Option<u32>,
+  pub default_shell: Option<String>,
+  pub login_shell_path: Vec<PathBuf>,
   pub home_dir: PathBuf,
   pub devbox_root: PathBuf,
   pub devbox_ready: bool,

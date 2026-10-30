@@ -19,6 +19,7 @@ type SystemInfo = Pick<
   | "diskTotalBytes"
   | "gpuName"
   | "gpuCoreCount"
+  | "defaultShell"
 >
 
 function EnvironmentItem({ label, value }: { label: string; value: string }) {
@@ -64,6 +65,10 @@ export function EnvironmentSummary({
           <EnvironmentItem
             label="GPU"
             value={displayGpu(environment.gpuName, environment.gpuCoreCount)}
+          />
+          <EnvironmentItem
+            label="默认 Shell"
+            value={environment.defaultShell ?? "未知"}
           />
         </dl>
       </CardContent>

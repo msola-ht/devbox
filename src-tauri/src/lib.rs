@@ -8,7 +8,10 @@ use modules::environment::{
   EnvironmentInfo, EnvironmentService, detect_system_profile,
 };
 use modules::settings::SettingsService;
-use modules::toolchain::{PluginRegistry, PythonPlugin, ToolchainService, UvPlugin};
+use modules::toolchain::{
+  BashPlugin, GitPlugin, NodePlugin, NpmPlugin, PluginRegistry, PnpmPlugin, PythonPlugin,
+  ToolchainService, UvPlugin, ZshPlugin,
+};
 use state::AppState;
 use tauri::Manager;
 use tauri_plugin_log::{Target, TargetKind};
@@ -43,13 +46,15 @@ pub fn run() {
 
       let profile = tauri::async_runtime::block_on(detect_system_profile(&home_dir));
       log::info!(
-        "系统信息: version={:?} build={:?} memory_total={:?} disk_total={:?} gpu={:?} gpu_cores={:?}",
+        "系统信息: version={:?} build={:?} memory_total={:?} disk_total={:?} gpu={:?} gpu_cores={:?} default_shell={:?} login_shell_path_entries={}",
         profile.os_version,
         profile.os_build,
         profile.memory_total_bytes,
         profile.disk_total_bytes,
         profile.gpu_name,
-        profile.gpu_core_count
+        profile.gpu_core_count,
+        profile.default_shell,
+        profile.login_shell_path.len()
       );
       let environment = EnvironmentService::new(EnvironmentInfo {
         os: std::env::consts::OS.to_string(),
@@ -60,6 +65,8 @@ pub fn run() {
         disk_total_bytes: profile.disk_total_bytes,
         gpu_name: profile.gpu_name,
         gpu_core_count: profile.gpu_core_count,
+        default_shell: profile.default_shell,
+        login_shell_path: profile.login_shell_path,
         home_dir: home_dir.clone(),
         devbox_root: root.clone(),
         devbox_ready,
@@ -68,6 +75,12 @@ pub fn run() {
       let registry = PluginRegistry::new(vec![
         Box::new(UvPlugin),
         Box::new(PythonPlugin),
+        Box::new(NodePlugin),
+        Box::new(NpmPlugin),
+        Box::new(PnpmPlugin),
+        Box::new(GitPlugin),
+        Box::new(BashPlugin),
+        Box::new(ZshPlugin),
       ]);
       let layout = DevboxLayout::new(root);
       let settings = if !devbox_ready {

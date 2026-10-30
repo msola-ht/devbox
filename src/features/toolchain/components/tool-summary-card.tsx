@@ -12,9 +12,11 @@ import type {
   ToolSummary,
 } from "@/features/toolchain/contracts"
 import {
+  getCurrentInstallation,
   getToolStatus,
   installationKey,
   isActiveManagedInstallation,
+  isDefaultShellTool,
 } from "@/features/toolchain/model"
 import { Badge } from "@/components/ui/badge"
 import {
@@ -87,12 +89,16 @@ function InstallationRow({
   )
 }
 
-export function ToolSummaryCard({ tool }: { tool: ToolSummary }) {
+export function ToolSummaryCard({
+  tool,
+  defaultShell = null,
+}: {
+  tool: ToolSummary
+  defaultShell?: string | null
+}) {
   const status = getToolStatus(tool)
-  const allInstallations = [
-    ...tool.systemInstallations,
-    ...tool.managedInstallations,
-  ]
+  const isDefaultShell = isDefaultShellTool(tool, defaultShell)
+  const currentInstallation = getCurrentInstallation(tool)
 
   return (
     <Card>
@@ -100,36 +106,40 @@ export function ToolSummaryCard({ tool }: { tool: ToolSummary }) {
         <CardTitle className="flex items-center gap-2">
           <PackageIcon className="size-4 text-muted-foreground" />
           {tool.displayName}
+          {isDefaultShell ? (
+            <Badge variant="outline">系统 Shell 默认</Badge>
+          ) : null}
         </CardTitle>
         <CardDescription>{tool.description}</CardDescription>
-        <CardAction>
-          <Badge variant={status.active ? "default" : "secondary"}>
-            {status.label}
-          </Badge>
-        </CardAction>
+        {status.label ? (
+          <CardAction>
+            <Badge variant={status.active ? "default" : "secondary"}>
+              {status.label}
+            </Badge>
+          </CardAction>
+        ) : null}
       </CardHeader>
       <CardContent className="flex flex-col gap-4">
-        {allInstallations.length === 0 ? (
+        {!currentInstallation ? (
           <Empty className="border">
             <EmptyHeader>
               <EmptyMedia variant="icon">
                 <PackageOpenIcon />
               </EmptyMedia>
-              <EmptyTitle>未发现 {tool.displayName}</EmptyTitle>
+              <EmptyTitle>当前环境未发现 {tool.displayName}</EmptyTitle>
               <EmptyDescription>
-                当前阶段只执行只读检测，安装与版本切换将在后续阶段接入。
+                默认 Shell 登录 PATH
+                中没有可用版本。当前阶段只执行只读检测，安装与版本切换将在后续阶段接入。
               </EmptyDescription>
             </EmptyHeader>
           </Empty>
         ) : (
           <ItemGroup className="gap-2">
-            {allInstallations.map((installation) => (
-              <InstallationRow
-                key={installationKey(installation)}
-                installation={installation}
-                active={isActiveManagedInstallation(tool, installation)}
-              />
-            ))}
+            <InstallationRow
+              key={installationKey(currentInstallation)}
+              installation={currentInstallation}
+              active={isActiveManagedInstallation(tool, currentInstallation)}
+            />
           </ItemGroup>
         )}
       </CardContent>

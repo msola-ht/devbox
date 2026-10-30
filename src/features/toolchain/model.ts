@@ -3,45 +3,75 @@ import type {
   ToolSummary,
 } from "@/features/toolchain/contracts"
 
+const SHELL_TOOL_IDS = new Set(["bash", "zsh"])
+
 export interface ToolStatus {
-  label: string
+  label: string | null
   active: boolean
 }
 
+function shellToolId(defaultShell: string | null) {
+  if (!defaultShell) {
+    return null
+  }
+
+  return (
+    defaultShell
+      .split(/[\\/]/)
+      .filter(Boolean)
+      .at(-1)
+      ?.replace(/\.exe$/i, "") ?? null
+  )
+}
+
+export function isDefaultShellTool(
+  tool: ToolSummary,
+  defaultShell: string | null
+) {
+  return shellToolId(defaultShell) === tool.toolId
+}
+
+export function filterToolsForDefaultShell(
+  tools: ToolSummary[],
+  defaultShell: string | null
+) {
+  if (!defaultShell) {
+    return tools.filter((tool) => !SHELL_TOOL_IDS.has(tool.toolId))
+  }
+
+  const currentShellId = shellToolId(defaultShell)
+  return tools.filter(
+    (tool) => !SHELL_TOOL_IDS.has(tool.toolId) || tool.toolId === currentShellId
+  )
+}
+
 export function getToolStatus(tool: ToolSummary): ToolStatus {
-  const healthyManagedInstallations = tool.managedInstallations.filter(
-    (installation) => installation.healthy
-  )
-  const activeManagedInstallation = healthyManagedInstallations.find(
-    (installation) => installation.installationId === tool.activeInstallationId
-  )
-
-  if (activeManagedInstallation) {
-    return { label: "DevBox 已激活", active: true }
-  }
-
-  if (healthyManagedInstallations.length > 0) {
-    return { label: "已安装，未激活", active: false }
-  }
-
-  if (tool.managedInstallations.length > 0) {
-    return { label: "托管版本异常", active: false }
-  }
-
-  if (tool.systemInstallations.length > 0) {
-    const healthySystemInstallations = tool.systemInstallations.filter(
-      (installation) => installation.healthy
-    )
+  const current = getCurrentInstallation(tool)
+  if (!current) {
     return {
-      label:
-        healthySystemInstallations.length > 0
-          ? "检测到系统版本"
-          : "系统版本异常",
+      label: tool.managedInstallations.length > 0 ? "无生效版本" : "未安装",
       active: false,
     }
   }
 
-  return { label: "未安装", active: false }
+  if (!current.healthy) {
+    return {
+      label: current.source === "system" ? "系统版本异常" : "托管版本异常",
+      active: false,
+    }
+  }
+
+  if (current.source === "managed") {
+    return { label: "DevBox 已激活", active: true }
+  }
+
+  return { label: null, active: false }
+}
+
+export function getCurrentInstallation(tool: ToolSummary) {
+  return [...tool.systemInstallations, ...tool.managedInstallations].find(
+    (installation) => installation.installationId === tool.currentInstallationId
+  )
 }
 
 export function isActiveManagedInstallation(
