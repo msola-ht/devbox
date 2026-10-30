@@ -12,6 +12,15 @@ export function selectVisibleTools(tools: ToolSummary[]) {
   return tools.filter((tool) => tool.kind !== "shell" || tool.isDefaultShell)
 }
 
+export function selectSwitchableShells(tools: ToolSummary[]) {
+  return tools.filter(
+    (tool) =>
+      tool.kind === "shell" &&
+      !tool.isDefaultShell &&
+      tool.shellInstallations.some((installation) => installation.healthy)
+  )
+}
+
 export function getToolStatus(tool: ToolSummary): ToolStatus {
   if (tool.activeInstallationErrorCode) {
     return { label: "激活状态异常", active: false }
@@ -21,6 +30,10 @@ export function getToolStatus(tool: ToolSummary): ToolStatus {
   if (!current) {
     if (tool.activeInstallationId) {
       return { label: "已激活但不在当前 PATH", active: false }
+    }
+
+    if (tool.kind === "shell" && tool.shellInstallations.length > 0) {
+      return { label: "默认路径不可用", active: false }
     }
 
     return {
@@ -55,6 +68,16 @@ export function isActiveManagedInstallation(
     installation.source === "managed" &&
     installation.healthy &&
     installation.installationId === tool.activeInstallationId
+  )
+}
+
+export function isDefaultShellInstallation(
+  tool: ToolSummary,
+  installation: InstallationSummary
+) {
+  return (
+    tool.kind === "shell" &&
+    installation.installationId === tool.effectiveInstallation?.installationId
   )
 }
 

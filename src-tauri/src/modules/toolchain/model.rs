@@ -41,6 +41,7 @@ pub struct ToolSummary {
   pub kind: ToolKind,
   pub is_default_shell: bool,
   pub effective_installation: Option<InstallationSummary>,
+  pub shell_installations: Vec<InstallationSummary>,
   pub managed_installations: Vec<InstallationSummary>,
   pub active_installation_id: Option<String>,
   pub active_installation_error_code: Option<String>,
@@ -63,6 +64,7 @@ impl ToolSummary {
       kind: descriptor.kind,
       is_default_shell: false,
       effective_installation: None,
+      shell_installations: Vec::new(),
       managed_installations: Vec::new(),
       active_installation_id: None,
       active_installation_error_code: None,
@@ -70,8 +72,12 @@ impl ToolSummary {
   }
 
   pub fn set_effective_installation(&mut self, installation: Option<InstallationSummary>) {
-    self.is_default_shell = self.kind == ToolKind::Shell && installation.is_some();
     self.effective_installation = installation;
+  }
+
+  pub fn set_shell_state(&mut self, installations: Vec<InstallationSummary>, is_default: bool) {
+    self.is_default_shell = self.kind == ToolKind::Shell && is_default;
+    self.shell_installations = installations;
   }
 
   pub fn set_managed_state(

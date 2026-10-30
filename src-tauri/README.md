@@ -56,7 +56,7 @@ main.rs
 
 - `EnvironmentSnapshot`：`bootId`、`revision`、`generatedAt`、`os`、`osVersion`、`osBuild`、`arch`、`homeDir`、`devboxRoot`、`devboxReady`、`devboxError`、`memoryTotalBytes`、`diskTotalBytes`、`gpuName`、`gpuCoreCount`、`defaultShell` 和 `shellEnvironmentStatus`。
 - `ToolListSnapshot`：`bootId`、`revision`、`environmentRevision`、`generatedAt`、`tools`。
-- `ToolSummary`：`toolId`、`displayName`、`description`、`pluginContractVersion`、`kind`、`isDefaultShell`、当前生效安装、托管安装、active 安装 ID 和 active 状态错误码。
+- `ToolSummary`：`toolId`、`displayName`、`description`、`pluginContractVersion`、`kind`、`isDefaultShell`、当前生效安装、该 Shell 类型的全部系统安装、托管安装、active 安装 ID 和 active 状态错误码。
 - `InstallationSummary`：`installationId`、`version`、`path`、`source`、`sourceHint`、`healthy`、`errorCode`。
 - `SettingsSnapshot`：`bootId`、`revision`、`generatedAt`、`proxy` 和 `systemProxy`。
 - `ProxySettings`：`system`、`direct`，或带 `protocol`、`host`、`port`、`bypass` 的 `manual`。
@@ -81,13 +81,14 @@ JSON 字段为 camelCase；标识符、revision 和契约版本以字符串传�
 | `descriptor` | 稳定 `toolId`、显示名、说明、契约版本和 `tool`/`shell` 类型 |
 | `executableNames` | 平台相关可执行文件名 |
 | `currentCandidateOverride` | Shell 插件按账户默认 Shell 指定当前候选；其他插件默认从登录 PATH 解析 |
+| `additionalSystemDirectories` | Shell 插件声明需要额外扫描的常见安装目录，用于发现同一 Shell 的多个安装 |
 | `versionArgs` | 版本探测参数 |
 | `parseVersionOutput` | 工具专有输出解析 |
 | `sourceHint` | 根据规范路径生成来源提示 |
 
 `lib.rs` 显式创建 `PluginRegistry` 并注册 `UvPlugin`、`PythonPlugin`、`NodePlugin`、`NpmPlugin`、`PnpmPlugin`、`GitPlugin`、`BashPlugin` 和 `ZshPlugin`；插件只接收默认 Shell 等最小探测上下文，不依赖完整环境模型。通用服务按登录 PATH 顺序选择每个工具的第一个可执行文件，负责路径规范化、只读进程探测、清单读取、当前安装判定和领域摘要，IPC 边界再映射响应 DTO。服务不包含具体工具的版本输出解析规则，通用版本解析和路径规范化位于插件支持模块。
 
-Python 的当前解释器同样由登录 PATH 决定，来源提示区分虚拟环境与 Conda；无法取得默认 Shell 登录 PATH 时不使用 `VIRTUAL_ENV`、应用进程 PATH 或常见目录冒充当前环境。Bash、Zsh 使用账户记录中的默认 Shell 路径，其他 Shell 不产生当前系统安装。版本目录、安装、验证和激活通过后续插件能力与 `operations` 服务接入；`operations` 只使用 `toolchain` 公开的能力接口。
+Python 的当前解释器同样由登录 PATH 决定，来源提示区分虚拟环境与 Conda；无法取得默认 Shell 登录 PATH 时不使用 `VIRTUAL_ENV`、应用进程 PATH 或常见目录冒充当前环境。Bash、Zsh 会扫描登录 PATH 和插件声明的常见目录，保留同一 Shell 的多个安装并按规范路径去重；账户记录的默认 Shell 路径作为当前项。默认 Shell 类型标记依据账户默认 Shell 的文件名，不依赖默认路径探测是否成功。界面只展示默认 Shell 类型的全部安装，其他 Shell 只提供可切换提示，不生成第二张工具卡。版本目录、安装、验证和激活通过后续插件能力与 `operations` 服务接入；`operations` 只使用 `toolchain` 公开的能力接口。
 
 ## 用户目录与状态
 

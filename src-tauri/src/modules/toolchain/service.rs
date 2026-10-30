@@ -1,3 +1,4 @@
+use std::collections::HashSet;
 use std::fs;
 use std::io::ErrorKind;
 use std::path::{Component, Path, PathBuf};
@@ -9,8 +10,8 @@ use serde::Deserialize;
 
 use super::error::ToolchainError;
 use super::model::{
-  ActiveInstallationState, InstallationSource, InstallationSummary, ToolDescriptor, ToolSummary,
-  ToolchainSnapshot,
+  ActiveInstallationState, InstallationSource, InstallationSummary, ToolDescriptor, ToolKind,
+  ToolSummary, ToolchainSnapshot,
 };
 use super::plugin::{ToolPlugin, ToolPluginContext};
 use super::plugins::PluginRegistry;
@@ -73,9 +74,11 @@ impl ToolchainService {
       .iter()
       .map(|tool| {
         format!(
-          "{} (effective={}, {} managed)",
+          "{} (default={}, effective={}, {} shell installations, {} managed)",
           tool.tool_id,
+          tool.is_default_shell,
           tool.effective_installation.is_some(),
+          tool.shell_installations.len(),
           tool.managed_installations.len()
         )
       })
@@ -129,11 +132,28 @@ impl ToolchainService {
 
     for plugin in self.registry.plugins() {
       let mut summary = ToolSummary::empty(plugin.descriptor());
-      summary.set_effective_installation(
-        self
-          .detect_system_installation(plugin, &context, &environment.login_shell_path)
-          .await?,
-      );
+      let is_shell = plugin.descriptor().kind == ToolKind::Shell;
+      let installations = self
+        .detect_system_installations(plugin, &context, &environment.login_shell_path)
+        .await?;
+      let effective_installation = if is_shell {
+        environment.default_shell.as_deref().and_then(|shell| {
+          let installation_id = format!("system:{}", canonical_path(Path::new(shell)));
+          installations
+            .iter()
+            .find(|installation| installation.installation_id == installation_id)
+            .cloned()
+        })
+      } else {
+        installations.first().cloned()
+      };
+      if is_shell {
+        summary.set_shell_state(
+          installations,
+          matches_default_shell(plugin, environment.default_shell.as_deref()),
+        );
+      }
+      summary.set_effective_installation(effective_installation);
       let (managed_installations, active_selection) = self.scan_managed_state(plugin).await?;
       summary.set_managed_state(managed_installations, active_selection);
       tools.push(summary);
@@ -142,18 +162,42 @@ impl ToolchainService {
     Ok(tools)
   }
 
-  async fn detect_system_installation(
+  async fn detect_system_installations(
     &self,
     plugin: &dyn ToolPlugin,
     context: &ToolPluginContext<'_>,
     login_shell_path: &[PathBuf],
-  ) -> Result<Option<InstallationSummary>, ToolchainError> {
-    let Some((canonical, display_path)) = self
-      .current_system_candidate(plugin, context, login_shell_path)
-      .await?
-    else {
-      return Ok(None);
+  ) -> Result<Vec<InstallationSummary>, ToolchainError> {
+    let candidates = if plugin.descriptor().kind == ToolKind::Shell {
+      self
+        .shell_candidates(plugin, context, login_shell_path)
+        .await?
+    } else {
+      self
+        .current_system_candidate(plugin, context, login_shell_path)
+        .await?
+        .into_iter()
+        .collect()
     };
+
+    let mut installations = Vec::with_capacity(candidates.len());
+    for (canonical, display_path) in candidates {
+      installations.push(
+        self
+          .probe_installation(plugin, login_shell_path, canonical, display_path)
+          .await,
+      );
+    }
+    Ok(installations)
+  }
+
+  async fn probe_installation(
+    &self,
+    plugin: &dyn ToolPlugin,
+    login_shell_path: &[PathBuf],
+    canonical: String,
+    display_path: PathBuf,
+  ) -> InstallationSummary {
     let source_hint = plugin.source_hint(&display_path);
     let probe = probe_version_with_path(
       &display_path,
@@ -163,7 +207,7 @@ impl ToolchainService {
     )
     .await;
 
-    let installation = match probe {
+    match probe {
       Ok(output) => {
         let version = plugin.parse_version_output(&output);
         let healthy = version.is_some();
@@ -193,9 +237,63 @@ impl ToolchainService {
           error_code: Some("SYSTEM_PROBE_FAILED".to_string()),
         }
       }
-    };
+    }
+  }
 
-    Ok(Some(installation))
+  async fn shell_candidates(
+    &self,
+    plugin: &dyn ToolPlugin,
+    context: &ToolPluginContext<'_>,
+    login_shell_path: &[PathBuf],
+  ) -> Result<Vec<(String, PathBuf)>, ToolchainError> {
+    let mut candidates = Vec::new();
+    let mut seen = HashSet::new();
+
+    if let Some(default_shell) = plugin.current_candidate_override(context) {
+      push_candidate(&mut candidates, &mut seen, default_shell);
+    }
+
+    let mut directories = login_shell_path.to_vec();
+    directories.extend(plugin.additional_system_directories());
+    let executables = plugin.executable_names().to_vec();
+
+    let discovered = tokio::task::spawn_blocking(move || {
+      let mut discovered = Vec::new();
+      let mut discovered_paths = HashSet::new();
+
+      for directory in directories {
+        if !directory.is_absolute() {
+          continue;
+        }
+
+        for executable in &executables {
+          let candidate = directory.join(executable);
+          if !is_executable_file(&candidate) {
+            continue;
+          }
+
+          let canonical = canonical_path(&candidate);
+          if discovered_paths.insert(canonical.clone()) {
+            discovered.push((canonical, candidate));
+          }
+        }
+      }
+
+      discovered
+    })
+    .await
+    .map_err(|error| ToolchainError::BlockingTaskFailed {
+      operation: "Shell 安装发现",
+      message: error.to_string(),
+    })?;
+
+    for (canonical, display_path) in discovered {
+      if seen.insert(canonical.clone()) {
+        candidates.push((canonical, display_path));
+      }
+    }
+
+    Ok(candidates)
   }
 
   async fn current_system_candidate(
@@ -257,6 +355,33 @@ impl ToolchainService {
       message: error.to_string(),
     })?
   }
+}
+
+fn push_candidate(
+  candidates: &mut Vec<(String, PathBuf)>,
+  seen: &mut HashSet<String>,
+  candidate: PathBuf,
+) {
+  if !is_executable_file(&candidate) {
+    return;
+  }
+
+  let canonical = canonical_path(&candidate);
+  if seen.insert(canonical.clone()) {
+    candidates.push((canonical, candidate));
+  }
+}
+
+fn matches_default_shell(plugin: &dyn ToolPlugin, default_shell: Option<&str>) -> bool {
+  let Some(default_shell) = default_shell else {
+    return false;
+  };
+  let shell = Path::new(default_shell);
+  shell.is_absolute()
+    && shell
+      .file_stem()
+      .and_then(|name| name.to_str())
+      .is_some_and(|name| name.eq_ignore_ascii_case(plugin.descriptor().tool_id))
 }
 
 fn is_executable_file(path: &Path) -> bool {

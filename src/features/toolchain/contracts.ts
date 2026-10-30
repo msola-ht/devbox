@@ -19,6 +19,7 @@ export interface ToolSummary {
   kind: ToolKind
   isDefaultShell: boolean
   effectiveInstallation: InstallationSummary | null
+  shellInstallations: InstallationSummary[]
   managedInstallations: InstallationSummary[]
   activeInstallationId: string | null
   activeInstallationErrorCode: string | null

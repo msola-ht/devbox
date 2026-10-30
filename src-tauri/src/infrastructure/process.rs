@@ -114,10 +114,11 @@ pub async fn probe_version_with_path(
 fn configure_environment(command: &mut Command, search_path: Option<&[std::path::PathBuf]>) {
   command.env_clear();
 
-  if let Some(path) = search_path
-    .and_then(paths_to_search_path)
-    .or_else(sanitized_path)
-  {
+  let path = match search_path {
+    Some(paths) => paths_to_search_path(paths),
+    None => sanitized_path(),
+  };
+  if let Some(path) = path {
     command.env("PATH", path);
   }
 
@@ -140,10 +141,14 @@ fn configure_environment(command: &mut Command, search_path: Option<&[std::path:
 }
 
 fn paths_to_search_path(paths: &[std::path::PathBuf]) -> Option<OsString> {
-  if paths.is_empty() {
+  let directories = paths
+    .iter()
+    .filter(|path| path.is_absolute())
+    .collect::<Vec<_>>();
+  if directories.is_empty() {
     return None;
   }
-  std::env::join_paths(paths.iter().filter(|path| path.is_absolute())).ok()
+  std::env::join_paths(directories).ok()
 }
 
 fn sanitized_path() -> Option<OsString> {

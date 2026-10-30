@@ -20,13 +20,18 @@ import {
   CardTitle,
 } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
-import { ToolchainEmptyState, ToolSummaryCard } from "@/features/toolchain"
+import {
+  ShellSwitchHint,
+  ToolchainEmptyState,
+  ToolSummaryCard,
+} from "@/features/toolchain"
 
 export function ToolsPage() {
   const {
     environment,
     toolchain,
     tools,
+    switchableShells,
     hasCurrentToolSnapshot,
     loading,
     refreshAll,
@@ -51,8 +56,9 @@ export function ToolsPage() {
             工具管理
           </h1>
           <p className="max-w-2xl text-sm leading-6 text-muted-foreground">
-            当前提供已注册工具的本机检测。每张卡片只展示默认 Shell 登录 PATH
-            中当前生效的版本，安装和切换能力将在下一阶段接入。
+            当前提供已注册工具的本机检测。普通工具展示默认 Shell 登录 PATH
+            中当前生效的版本，默认 Shell
+            展示检测到的同类型安装；安装和切换能力将在下一阶段接入。
           </p>
         </div>
         <RefreshButton loading={loading} onClick={() => void refreshAll()} />
@@ -122,6 +128,8 @@ export function ToolsPage() {
           message={toolchain.state.error.message}
         />
       ) : null}
+
+      <ShellSwitchHint shells={switchableShells} />
 
       {hasCurrentToolSnapshot ? (
         tools.length > 0 ? (

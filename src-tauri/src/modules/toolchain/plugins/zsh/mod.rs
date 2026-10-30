@@ -34,6 +34,22 @@ impl ToolPlugin for ZshPlugin {
     default_shell_candidate("zsh", context.default_shell)
   }
 
+  fn additional_system_directories(&self) -> Vec<PathBuf> {
+    #[cfg(not(windows))]
+    {
+      vec![
+        PathBuf::from("/opt/homebrew/bin"),
+        PathBuf::from("/usr/local/bin"),
+        PathBuf::from("/usr/bin"),
+        PathBuf::from("/bin"),
+      ]
+    }
+    #[cfg(windows)]
+    {
+      Vec::new()
+    }
+  }
+
   fn version_args(&self) -> &'static [&'static str] {
     &["--version"]
   }

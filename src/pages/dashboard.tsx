@@ -10,13 +10,18 @@ import {
   EnvironmentSummary,
   ShellEnvironmentNotice,
 } from "@/features/environment"
-import { ToolchainEmptyState, ToolSummaryCard } from "@/features/toolchain"
+import {
+  ShellSwitchHint,
+  ToolchainEmptyState,
+  ToolSummaryCard,
+} from "@/features/toolchain"
 
 export function DashboardPage() {
   const {
     environment,
     toolchain,
     tools,
+    switchableShells,
     hasCurrentToolSnapshot,
     loading,
     refreshAll,
@@ -64,7 +69,7 @@ export function DashboardPage() {
           <div>
             <h2 className="font-heading text-lg font-semibold">工具状态</h2>
             <p className="mt-1 text-sm text-muted-foreground">
-              只展示默认 Shell 登录 PATH 中当前生效的版本
+              普通工具展示当前生效版本，Shell 展示默认类型的已检测安装
             </p>
           </div>
           {hasCurrentToolSnapshot ? (
@@ -80,6 +85,8 @@ export function DashboardPage() {
             message={toolchain.state.error.message}
           />
         ) : null}
+
+        <ShellSwitchHint shells={switchableShells} />
 
         {hasCurrentToolSnapshot ? (
           tools.length > 0 ? (

@@ -28,6 +28,7 @@ struct ToolSummaryDto {
   kind: ToolKindDto,
   is_default_shell: bool,
   effective_installation: Option<InstallationSummaryDto>,
+  shell_installations: Vec<InstallationSummaryDto>,
   managed_installations: Vec<InstallationSummaryDto>,
   active_installation_id: Option<String>,
   active_installation_error_code: Option<String>,
@@ -107,6 +108,11 @@ impl From<&ToolSummary> for ToolSummaryDto {
         .effective_installation
         .as_ref()
         .map(InstallationSummaryDto::from),
+      shell_installations: tool
+        .shell_installations
+        .iter()
+        .map(InstallationSummaryDto::from)
+        .collect(),
       managed_installations: tool
         .managed_installations
         .iter()

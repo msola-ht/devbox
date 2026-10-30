@@ -15,6 +15,7 @@ import {
   getToolStatus,
   installationKey,
   isActiveManagedInstallation,
+  isDefaultShellInstallation,
 } from "@/features/toolchain/model"
 import { Badge } from "@/components/ui/badge"
 import {
@@ -45,10 +46,10 @@ import {
 
 function InstallationRow({
   installation,
-  active,
+  currentLabel,
 }: {
   installation: InstallationSummary
-  active: boolean
+  currentLabel: string | null
 }) {
   const sourceLabel =
     installation.source === "managed"
@@ -75,10 +76,10 @@ function InstallationRow({
         ) : null}
       </ItemContent>
       <ItemActions className="flex-col items-end gap-1">
-        {active ? (
+        {currentLabel ? (
           <Badge>
             <CheckCircle2Icon data-icon="inline-start" />
-            当前
+            {currentLabel}
           </Badge>
         ) : null}
         <Badge variant="secondary">{sourceLabel}</Badge>
@@ -90,6 +91,12 @@ function InstallationRow({
 export function ToolSummaryCard({ tool }: { tool: ToolSummary }) {
   const status = getToolStatus(tool)
   const currentInstallation = tool.effectiveInstallation
+  const installations =
+    tool.kind === "shell"
+      ? tool.shellInstallations
+      : currentInstallation
+        ? [currentInstallation]
+        : []
 
   return (
     <Card>
@@ -116,7 +123,7 @@ export function ToolSummaryCard({ tool }: { tool: ToolSummary }) {
         ) : null}
       </CardHeader>
       <CardContent className="flex flex-col gap-4">
-        {!currentInstallation ? (
+        {installations.length === 0 ? (
           <Empty className="border">
             <EmptyHeader>
               <EmptyMedia variant="icon">
@@ -131,11 +138,19 @@ export function ToolSummaryCard({ tool }: { tool: ToolSummary }) {
           </Empty>
         ) : (
           <ItemGroup className="gap-2">
-            <InstallationRow
-              key={installationKey(currentInstallation)}
-              installation={currentInstallation}
-              active={isActiveManagedInstallation(tool, currentInstallation)}
-            />
+            {installations.map((installation) => (
+              <InstallationRow
+                key={installationKey(installation)}
+                installation={installation}
+                currentLabel={
+                  isDefaultShellInstallation(tool, installation)
+                    ? "默认"
+                    : isActiveManagedInstallation(tool, installation)
+                      ? "当前"
+                      : null
+                }
+              />
+            ))}
           </ItemGroup>
         )}
       </CardContent>

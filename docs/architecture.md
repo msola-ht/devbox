@@ -375,10 +375,11 @@ src/features/
 
 1. 环境模块在启动和显式刷新时识别操作系统版本、CPU 架构、用户主目录、账户默认 Shell、内存、主目录所在卷容量和 GPU 等规格；查询只读取快照，不做持续采样或实时用量统计。
 2. 托管检测读取 `.devbox/tools` 下的安装清单。
-3. 系统检测使用账户默认 Bash/Zsh 的登录环境 PATH，按顺序选择每个工具的第一个可执行文件；Bash、Zsh 使用账户记录的默认 Shell 路径。
-4. 对当前可执行文件执行版本命令，按插件规则解析并记录绝对路径、来源和健康状态。探测 npm/pnpm 等脚本时复用同一登录 PATH。
-5. 工具快照将登录 PATH 解析出的 `effectiveInstallation`、托管安装库存和 active 指针分开表达；界面每张工具卡只展示当前生效安装，不把 active 状态冒充登录 PATH 中的当前版本。
-6. 环境快照可显式刷新并递增 revision；工具链缓存按环境 revision 失效，避免默认 Shell 或登录 PATH 变化后继续使用旧结果。
+3. 系统检测使用账户默认 Bash/Zsh 的登录环境 PATH，按顺序选择每个普通工具的第一个可执行文件。Bash、Zsh 额外扫描登录 PATH 和插件声明的常见目录，收集同类型 Shell 的多个安装，并将账户记录的默认 Shell 路径标记为当前项。
+4. 对每个候选可执行文件执行版本命令，按插件规则解析并记录绝对路径、来源和健康状态。探测 npm/pnpm 等脚本时复用同一登录 PATH。
+5. 工具快照将登录 PATH 解析出的 `effectiveInstallation`、默认 Shell 类型标记、同类型 Shell 安装列表、托管安装库存和 active 指针分开表达；默认 Shell 类型标记不依赖默认路径探测是否成功。普通工具卡只展示当前生效安装，默认 Shell 卡展示该类型的全部安装，不把 active 状态冒充登录 PATH 中的当前版本。
+6. 非默认 Shell 不生成工具卡，只在检测到健康安装时提供可切换提示，避免 Zsh 默认时同时出现 Bash 卡片。
+7. 环境快照可显式刷新并递增 revision；工具链缓存按环境 revision 失效，避免默认 Shell 或登录 PATH 变化后继续使用旧结果。
 
 当前硬件规格检测以 macOS 为主：macOS 提供系统版本、内存、主目录所在卷容量、GPU 和账户默认 Shell，Linux 提供系统版本、内存、容量和账户默认 Shell，Windows 目前只提供系统版本。未实现的字段显式返回 null，界面显示“未知”，待对应平台原生验证后补齐。
 
@@ -621,7 +622,7 @@ UI -> 使用权威快照更新任务与工具状态
 页面打开
   -> 前端注册 event，查询 task/tool/release 快照
   -> Rust 读取 .devbox，执行只读检测并按 bootId 生成 revision
-  -> 前端展示每个工具的当前生效安装和默认 Shell
+  -> 前端展示普通工具当前生效安装、默认 Shell 的全部已检测安装和可切换 Shell 提示
 
 用户安装 uv 版本
   -> feature hook 生成 clientRequestId

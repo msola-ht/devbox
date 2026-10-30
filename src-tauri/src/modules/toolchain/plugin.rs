@@ -12,6 +12,9 @@ pub trait ToolPlugin: Send + Sync {
   fn current_candidate_override(&self, _context: &ToolPluginContext<'_>) -> Option<PathBuf> {
     None
   }
+  fn additional_system_directories(&self) -> Vec<PathBuf> {
+    Vec::new()
+  }
   fn version_args(&self) -> &'static [&'static str];
   fn parse_version_output(&self, output: &str) -> Option<String>;
   fn source_hint(&self, path: &Path) -> Option<String>;

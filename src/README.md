@@ -69,12 +69,13 @@ main.tsx
 | `contracts.ts` | `ToolListSnapshot`、`ToolSummary` 和 `InstallationSummary` |
 | `api.ts` | 初次查询使用 `list_tools`，显式刷新使用 `refresh_tools` |
 | `hooks/use-toolchain.ts` | 创建模块级快照 store |
-| `model.ts` | 选择当前 Shell 对应卡片，派生当前生效版本、active 状态和安装项展示键 |
-| `components/tool-summary-card.tsx` | 只展示 `effectiveInstallation`，以及插件返回的说明、健康状态和 active 标记 |
+| `model.ts` | 选择当前 Shell 对应卡片和可切换 Shell，派生当前生效版本、active 状态和安装项展示键 |
+| `components/tool-summary-card.tsx` | 普通工具只展示当前生效安装；Shell 卡片展示该类型的全部安装，并标记账户默认项 |
+| `components/shell-switch-hint.tsx` | 将其他已检测 Shell 作为可切换提示展示，不生成工具卡 |
 | `components/toolchain-empty-state.tsx` | 展示成功返回但没有注册工具时的空状态 |
 | `index.ts` | 模块公开出口 |
 
-工具名称、说明、类型、是否默认 Shell 和契约版本来自 Rust 插件 DTO；前端没有针对具体工具或 Shell ID 的检测分支。每张工具卡只展示默认 Shell 登录 PATH 中当前生效的安装，Shell 卡片由后端 `isDefaultShell` 标记选择。托管库存和 active 指针单独建模，不把已激活误当成已进入登录 PATH。新增工具检测只需在 Rust 注册表接入插件，通用工具列表自动展示。
+工具名称、说明、类型、是否默认 Shell 和契约版本来自 Rust 插件 DTO；前端没有针对具体工具或 Shell ID 的检测分支。普通工具卡只展示默认 Shell 登录 PATH 中当前生效的安装；默认 Shell 卡片展示后端检测到的同类型全部安装，并标记账户默认路径。默认 Shell 类型标记不以探测成功为前提，因此默认路径异常时仍保留对应卡片。其他 Shell 不生成卡片，只通过可切换提示展示。托管库存和 active 指针单独建模，不把已激活误当成已进入登录 PATH。新增工具检测只需在 Rust 注册表接入插件，通用工具列表自动展示。
 
 ### `features/settings`
 

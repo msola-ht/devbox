@@ -34,6 +34,10 @@ impl ToolPlugin for BashPlugin {
     default_shell_candidate("bash", context.default_shell)
   }
 
+  fn additional_system_directories(&self) -> Vec<PathBuf> {
+    shell_search_directories()
+  }
+
   fn version_args(&self) -> &'static [&'static str] {
     &["--version"]
   }
@@ -70,4 +74,25 @@ impl ToolPlugin for BashPlugin {
       Some("PATH".to_string())
     }
   }
+}
+
+#[cfg(not(windows))]
+fn shell_search_directories() -> Vec<PathBuf> {
+  vec![
+    PathBuf::from("/opt/homebrew/bin"),
+    PathBuf::from("/usr/local/bin"),
+    PathBuf::from("/usr/bin"),
+    PathBuf::from("/bin"),
+  ]
+}
+
+#[cfg(windows)]
+fn shell_search_directories() -> Vec<PathBuf> {
+  let mut directories = std::env::var_os("ProgramFiles")
+    .map(|path| vec![PathBuf::from(path).join("Git/bin")])
+    .unwrap_or_default();
+  if let Some(local_app_data) = std::env::var_os("LOCALAPPDATA") {
+    directories.push(PathBuf::from(local_app_data).join("Programs/Git/bin"));
+  }
+  directories
 }

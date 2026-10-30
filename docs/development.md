@@ -88,6 +88,7 @@ lib.rs → all composition
 | `descriptor` | 稳定工具 ID、显示名称、说明、契约版本和工具类型 |
 | `executable_names` | 平台相关可执行文件名 |
 | `current_candidate_override` | Shell 插件按默认 Shell 指定当前候选，其他插件默认解析登录 PATH |
+| `additional_system_directories` | Shell 插件声明额外的常见安装目录，用于发现同类型 Shell 的多个安装 |
 | `version_args` | 版本探测参数 |
 | `parse_version_output` | 工具专有版本输出解析 |
 | `source_hint` | 来源提示 |
