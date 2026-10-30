@@ -35,7 +35,7 @@ main.rs
 | [modules/toolchain/](src/modules/toolchain) | 工具模型、检测应用服务、快照缓存、类型化错误、插件契约和注册表 |
 | [infrastructure/path.rs](src/infrastructure/path.rs) | `.devbox` 布局、权限和目录安全校验 |
 | [infrastructure/process.rs](src/infrastructure/process.rs) | 受控版本命令执行、超时和输出上限 |
-| [infrastructure/network/](src/infrastructure/network) | 根据系统、直连或手动代理路由构建 HTTPS 客户端 |
+| [infrastructure/network/](src/infrastructure/network) | 读取系统与环境代理，并根据系统、直连或手动代理路由构建 HTTPS 客户端 |
 
 系统规格在应用启动时检测一次；当前 macOS 覆盖版本、内存、卷容量和 GPU，Linux 覆盖版本、内存和容量，Windows 仅覆盖版本。未实现的字段以 `null` 返回。
 
@@ -45,7 +45,7 @@ main.rs
 | --- | --- |
 | `get_environment` | 返回启动时检测的 `bootId`、OS 版本、架构、内存、主目录所在卷容量、GPU、用户目录、`.devbox` 路径和目录状态 |
 | `get_settings` | 返回代理配置、revision 和当前生效的系统代理读取结果 |
-| `update_settings` | 校验、持久化代理配置并返回新 revision |
+| `update_settings` | 校验、持久化代理配置并返回包含系统代理读取结果的新 revision |
 | `test_proxy` | 使用当前输入访问固定 GitHub HTTPS 目标，不读取或修改已保存配置 |
 | `list_tools` | 调用工具链服务；已有缓存时返回权威快照，无缓存时执行检测并缓存 |
 | `refresh_tools` | 调用工具链服务重新检测并分配新 revision |
@@ -126,7 +126,7 @@ Python 提供系统解释器检测。版本目录、安装、验证和激活通�
 - 版本命令使用绝对可执行路径和参数数组，不使用 Shell；清空环境后仅保留 Windows 运行所需的最小系统变量。
 - 版本探测有 3 秒超时、stdout/stderr 各 64 KiB 上限，并终止直接子进程。
 - PATH 中的相对目录会被跳过，避免执行当前工作目录中的同名程序。
-- 系统模式使用 reqwest 读取操作系统静态 HTTP/HTTPS 代理，Linux 无统一系统代理时使用代理环境变量；设置快照使用同一代理匹配器返回实际生效路由，按最终选中路由区分环境变量与系统设置来源，并只暴露脱敏 URL 和认证需求。直连和手动模式显式关闭自动代理，手动路由只使用保存的主机和端口。目的地强制 HTTPS，重定向最多 5 次。
+- 系统模式使用 reqwest 读取操作系统静态 HTTP/HTTPS 代理，Linux 无统一系统代理时使用代理环境变量；设置快照使用同一代理匹配器返回实际生效路由，按最终选中路由的地址与认证信息区分环境变量与系统设置来源，并只暴露脱敏 URL 和认证需求。直连和手动模式显式关闭自动代理，手动路由只使用保存的主机和端口。目的地强制 HTTPS，重定向最多 5 次。
 - 下载任务应在开始时捕获当次网络路由，执行期间保持同一代理；设置变更只影响之后开始的任务。
 - 代理测试只访问固定官方目标，不接受前端传入任意 URL；代理不要求账号密码，407 返回 `PROXY_AUTH_UNSUPPORTED`。
 - `build.rs` 为六个自定义 command 生成 allow/deny ACL；`capabilities/default.json` 只向 `main` 窗口放行这些命令。

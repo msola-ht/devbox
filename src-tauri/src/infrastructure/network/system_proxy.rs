@@ -36,11 +36,11 @@ pub fn inspect_system_proxy() -> SystemProxyInspection {
 fn resolve(system: &Matcher, environment: &Matcher, target: &Uri) -> Option<SystemProxyEndpoint> {
   let matched = system.intercept(target)?;
   // `Matcher::from_system` starts with environment routes, then fills missing
-  // HTTP/HTTPS routes from the OS. Comparing the selected route avoids marking
-  // an ALL_PROXY fallback as the source when the OS supplied the actual route.
+  // HTTP/HTTPS routes from the OS. Comparing the complete selected route avoids
+  // misattributing an ALL_PROXY fallback when the OS supplied the actual route.
   let source = if environment
     .intercept(target)
-    .is_some_and(|environment| environment.uri() == matched.uri())
+    .is_some_and(|environment| same_route(&environment, &matched))
   {
     SystemProxySource::Environment
   } else {
@@ -54,6 +54,12 @@ fn resolve(system: &Matcher, environment: &Matcher, target: &Uri) -> Option<Syst
     source,
     requires_authentication: requires_authentication(&matched),
   })
+}
+
+fn same_route(left: &Intercept, right: &Intercept) -> bool {
+  left.uri() == right.uri()
+    && left.basic_auth() == right.basic_auth()
+    && left.raw_auth() == right.raw_auth()
 }
 
 fn sanitized_url(intercept: &Intercept) -> String {

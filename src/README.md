@@ -104,6 +104,8 @@ main.tsx
 
 `components/ui` 是 shadcn/ui CLI 生成的基础组件；业务层只使用公开 API，不修改生成件内部实现。
 
+状态使用 `Badge`，提示和失败使用 `Alert`，空状态与安装行分别使用 `Empty` 和 `Item`；全局 `Toaster` 挂在 `AppLayout`，页面不重复创建通知容器。
+
 `components/nav-main.tsx`、`nav-projects.tsx`、`nav-user.tsx` 和 `team-switcher.tsx` 作为 UI 资源保留，不参与当前应用组合树。
 
 ## 交付边界

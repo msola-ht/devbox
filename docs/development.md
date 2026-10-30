@@ -42,7 +42,8 @@ SettingsPage
   → getSettings / updateSettings / testProxy
   → get_settings / update_settings / test_proxy
   → SettingsService
-  → config.json / network client
+  → config.json
+  → hyper-util 系统与环境代理匹配器
 ```
 
 工具链快照和代理设置由 Rust 持有权威结果，前端保存查询快照和表单草稿。环境与工具链模块通过 `src/app` 协调联合加载和刷新，页面只负责路由与展示组合。
@@ -323,6 +324,8 @@ bunx --bun shadcn@latest add <component-or-block> --overwrite
 ```
 
 `src/components/ui/**` 保持 CLI 生成结构。业务页面通过公开 API、variants 和 props 组合组件。
+
+不主动使用 Computer Use。只有用户明确要求桌面或浏览器 UI 自动化时才调用；未获授权时完成可执行的构建和静态检查，并明确说明未能观测的 UI 行为。
 
 ## 验证
 
