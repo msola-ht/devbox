@@ -8,5 +8,5 @@ pub(crate) use error::ToolchainError;
 pub(crate) use model::{
   InstallationSource, InstallationSummary, ToolSummary, ToolchainSnapshot,
 };
-pub use plugins::{PluginRegistry, UvPlugin};
+pub use plugins::{PluginRegistry, PythonPlugin, UvPlugin};
 pub use service::ToolchainService;

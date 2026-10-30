@@ -2,7 +2,7 @@
 
 [文档索引](../docs/README.md) · [架构设计](../docs/architecture.md) · [前端规则](AGENTS.md) · [后端模块说明](../src-tauri/README.md) · [开发指南](../docs/development.md)
 
-本文描述当前前端实现。当前已接入环境查询、工具状态查询与刷新，尚未接入安装、版本目录、任务进度或业务事件。
+本文描述当前前端实现。当前功能范围包括环境查询、工具状态查询与刷新；安装、版本目录、任务进度和业务事件按开发指南的实施顺序进入前端模块。
 
 ## 应用入口与连接关系
 
@@ -72,7 +72,7 @@ main.tsx
 | `components/toolchain-empty-state.tsx` | 展示成功返回但没有注册工具时的空状态 |
 | `index.ts` | 模块公开出口 |
 
-工具名称、说明和契约版本来自 Rust 插件 DTO；前端没有针对 uv 的检测分支。
+工具名称、说明和契约版本来自 Rust 插件 DTO；前端没有针对 uv 或 Python 的检测分支。新增工具检测只需在 Rust 注册表接入插件，通用工具列表自动展示。
 
 ## 通信与快照状态
 
@@ -82,16 +82,16 @@ main.tsx
 - 快照记录 `bootId` 和 `revision`。`bootId` 改变时重置 revision；较旧 revision 不覆盖已应用的新快照。
 - 刷新时保留已有数据；刷新失败后状态为 `error` 且旧数据仍可展示，页面同时显示错误提示。
 - 初次进入使用查询命令；用户点击刷新时才调用重检测命令。
-- 当前没有 event、channel、任务订阅或持久化业务缓存。
+- event、channel、任务订阅和持久化业务缓存归后续操作链路。
 
 ## 基础组件与遗留文件
 
 `components/ui` 是 shadcn/ui CLI 生成的基础组件；业务层只使用公开 API，不修改生成件内部实现。
 
-`components/nav-main.tsx`、`nav-projects.tsx`、`nav-user.tsx` 和 `team-switcher.tsx` 是模板遗留组件，目前没有进入应用组合树，也不代表 DevBox 已具备项目、团队或账户功能。后续清理应与对应 UI 变更一并处理。
+`components/nav-main.tsx`、`nav-projects.tsx`、`nav-user.tsx` 和 `team-switcher.tsx` 作为 UI 资源保留，不参与当前应用组合树。
 
-## 当前边界
+## 交付边界
 
-- 前端只展示 Rust 返回的环境和检测快照，不写业务持久数据。
-- 浏览器构建可以验证页面状态，但不能证明 Tauri IPC、目录初始化或进程探测成功。
-- 安装、下载、版本目录、任务进度、取消、激活和卸载尚无前端实现或契约。
+- 前端展示 Rust 返回的环境和检测快照，业务持久数据归 Rust。
+- 浏览器验证页面状态，桌面运行验证 Tauri IPC、目录初始化和进程探测。
+- 安装、下载、版本目录、任务进度、取消、激活和卸载通过后续 `operations` feature 接入。

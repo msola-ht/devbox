@@ -2,7 +2,7 @@
 
 [文档索引](../docs/README.md) · [架构设计](../docs/architecture.md) · [后端规则](AGENTS.md) · [前端模块说明](../src/README.md) · [开发指南](../docs/development.md)
 
-本文描述当前 Rust 与 Tauri 实现。当前后端已提供 `.devbox` 初始化、环境快照、uv 系统检测、托管安装扫描和工具快照缓存；安装、任务、持久化迁移和业务事件尚未实现。
+本文描述当前 Rust 与 Tauri 实现。当前后端提供 `.devbox` 初始化、环境快照、uv 与 Python 系统检测、托管安装扫描和工具快照缓存；安装、任务、持久化迁移和业务事件按开发指南的实施顺序进入后端模块。
 
 ## 启动与组合
 
@@ -15,7 +15,7 @@ main.rs
         ensure_layout
         log -> ~/.devbox/logs
         EnvironmentService
-        PluginRegistry(UvPlugin) + DevboxLayout + ToolchainService
+        PluginRegistry(UvPlugin, PythonPlugin) + DevboxLayout + ToolchainService
         manage(AppState)
       invoke_handler
         get_environment / list_tools / refresh_tools
@@ -68,9 +68,9 @@ JSON 字段为 camelCase；标识符、revision 和契约版本以字符串传�
 | `parseVersionOutput` | 工具专有输出解析 |
 | `sourceHint` | 根据规范路径生成来源提示 |
 
-`lib.rs` 显式创建 `PluginRegistry` 并注册 `UvPlugin`；插件接收 OS、用户目录等最小探测上下文，而不依赖完整环境模型。通用服务负责 PATH 合并、路径规范化与去重、只读进程探测、清单读取和领域摘要，IPC 边界再映射响应 DTO。服务不包含 uv 的输出解析规则。
+`lib.rs` 显式创建 `PluginRegistry` 并注册 `UvPlugin`、`PythonPlugin`；插件接收 OS、用户目录等最小探测上下文，而不依赖完整环境模型。通用服务负责 PATH 合并、路径规范化与去重、只读进程探测、清单读取和领域摘要，IPC 边界再映射响应 DTO。服务不包含 uv 或 Python 的输出解析规则。
 
-当前未实现插件契约中的 `supports`、`listReleases`、`selectAsset`、`installPlan`、`validate` 和激活计划。
+Python 提供系统解释器检测。版本目录、安装、验证和激活通过后续插件能力与 `operations` 服务接入；`operations` 只使用 `toolchain` 公开的能力接口。
 
 ## 用户目录与状态
 
@@ -92,14 +92,16 @@ JSON 字段为 camelCase；标识符、revision 和契约版本以字符串传�
 
 当前没有写入 manifest、active 指针或 `.devbox/bin` 的代码，也没有原子替换、备份迁移或跨进程锁。
 
+安装链路接入后，托管安装清单与 active 指针的唯一写入入口归 `toolchain` 库存服务；`operations` 提交验证通过的安装计划，不直接写这些文件。
+
 ## 并发与缓存
 
 - `bootId` 在每次 Rust 进程启动时生成。
 - 工具链 revision 和最新快照缓存归 `ToolchainService`，revision 在检测开始时分配并在进程内单调递增。
 - 并发刷新不会让较低 revision 覆盖已缓存的较高 revision。
 - 系统安装候选发现和托管安装扫描通过 `spawn_blocking` 脱离异步执行器，避免阻塞文件操作占住 Tokio 工作线程。
-- 当前单次加载会合并，但 Rust 尚未提供单飞探测、任务注册表或跨进程锁。
-- 前端断连或被销毁不影响当前只读检测；尚未实现任何后台写任务。
+- 前端快照 Store 合并同一业务查询；Rust 单飞探测、任务注册表和跨进程锁随操作服务建立。
+- 前端断连或被销毁不影响当前只读检测；后台写任务归 `operations` 状态机。
 
 ## 日志与安全边界
 
@@ -121,11 +123,11 @@ JSON 字段为 camelCase；标识符、revision 和契约版本以字符串传�
 
 当前 CSP 仍为 `null`。没有远程内容，但正式发布前仍需配置并验证收紧后的 CSP。
 
-## 当前未实现
+## 后续交付
 
-- Release 目录、资产选择、下载、摘要校验、解压、安装、更新和取消。
-- 操作任务、channel、event、重连查询、启动恢复和跨进程锁。
-- 持久化格式迁移、备份恢复、卸载、缓存清理和修复命令。
-- Python、Node.js、Git 插件。
-- Windows、Linux 原生构建与运行验证。
-- 自动生成的 TypeScript IPC 类型和运行时契约校验。
+- Release 目录、资产选择、下载、摘要校验、解压、安装、更新和取消进入工具安装链路。
+- 操作任务、channel、event、重连查询、启动恢复和跨进程锁进入 `operations` 聚合。
+- 持久化格式迁移、备份恢复、卸载、缓存清理和修复命令进入完整工具管理能力。
+- Python 复用 uv 托管运行时；Node.js 和 Git 作为独立插件接入。
+- Windows 和 Linux 在目标平台完成原生构建与运行验证。
+- TypeScript IPC 类型和运行时契约校验由契约生成流程维护。

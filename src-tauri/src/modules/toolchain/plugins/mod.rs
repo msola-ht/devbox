@@ -1,6 +1,8 @@
+mod python;
 mod uv;
 
 use super::plugin::ToolPlugin;
+pub use python::PythonPlugin;
 pub use uv::UvPlugin;
 
 pub struct PluginRegistry {

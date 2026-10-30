@@ -5,7 +5,7 @@ mod state;
 
 use infrastructure::path::{DevboxLayout, devbox_root, ensure_layout};
 use modules::environment::{EnvironmentInfo, EnvironmentService};
-use modules::toolchain::{PluginRegistry, ToolchainService, UvPlugin};
+use modules::toolchain::{PluginRegistry, PythonPlugin, ToolchainService, UvPlugin};
 use state::AppState;
 use tauri::Manager;
 use tauri_plugin_log::{Target, TargetKind};
@@ -45,7 +45,10 @@ pub fn run() {
         devbox_ready: devbox_error.is_none(),
         devbox_error,
       });
-      let registry = PluginRegistry::new(vec![Box::new(UvPlugin)]);
+      let registry = PluginRegistry::new(vec![
+        Box::new(UvPlugin),
+        Box::new(PythonPlugin),
+      ]);
       let toolchain = ToolchainService::new(registry, DevboxLayout::new(root));
       app.manage(AppState::new(environment, toolchain));
 
