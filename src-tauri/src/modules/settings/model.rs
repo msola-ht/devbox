@@ -71,6 +71,7 @@ impl ManualProxySettings {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum ProxySettings {
+  System,
   Direct,
   Manual(ManualProxySettings),
 }
@@ -93,7 +94,7 @@ impl Settings {
 impl Default for Settings {
   fn default() -> Self {
     Self {
-      proxy: ProxySettings::Direct,
+      proxy: ProxySettings::System,
     }
   }
 }

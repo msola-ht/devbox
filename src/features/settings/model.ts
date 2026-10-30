@@ -4,7 +4,7 @@ import type {
 } from "@/features/settings/contracts"
 
 export interface ProxyDraft {
-  mode: "direct" | "manual"
+  mode: "system" | "direct" | "manual"
   protocol: ProxyProtocol
   host: string
   port: string
@@ -12,9 +12,9 @@ export interface ProxyDraft {
 }
 
 export function draftFromProxy(proxy: ProxySettings): ProxyDraft {
-  if (proxy.mode === "direct") {
+  if (proxy.mode !== "manual") {
     return {
-      mode: "direct",
+      mode: proxy.mode,
       protocol: "http",
       host: "",
       port: "",
@@ -32,6 +32,10 @@ export function draftFromProxy(proxy: ProxySettings): ProxyDraft {
 }
 
 export function draftToProxy(draft: ProxyDraft): ProxySettings | null {
+  if (draft.mode === "system") {
+    return { mode: "system" }
+  }
+
   if (draft.mode === "direct") {
     return { mode: "direct" }
   }
@@ -66,6 +70,9 @@ export function parseBypass(value: string): string[] {
 }
 
 export function proxySummary(proxy: ProxySettings): string {
+  if (proxy.mode === "system") {
+    return "系统代理"
+  }
   if (proxy.mode === "direct") {
     return "直连"
   }

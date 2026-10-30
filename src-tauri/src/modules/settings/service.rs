@@ -243,6 +243,7 @@ fn apply_update(
 
 fn route_for(proxy: &ProxySettings) -> NetworkRoute {
   match proxy {
+    ProxySettings::System => NetworkRoute::system(),
     ProxySettings::Direct => NetworkRoute::direct(),
     ProxySettings::Manual(proxy) => NetworkRoute::manual(ProxyEndpoint {
       url: proxy.endpoint_url(),

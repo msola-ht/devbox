@@ -8,7 +8,8 @@ use uuid::Uuid;
 use super::{ManualProxySettings, ProxyProtocol, ProxySettings, Settings, SettingsError};
 use crate::infrastructure::path::DevboxLayout;
 
-const SCHEMA_VERSION: u32 = 1;
+const MIN_SCHEMA_VERSION: u32 = 1;
+const SCHEMA_VERSION: u32 = 2;
 const MAX_CONFIG_BYTES: u64 = 64 * 1024;
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -16,6 +17,12 @@ const MAX_CONFIG_BYTES: u64 = 64 * 1024;
 struct StoredConfig {
   schema_version: u32,
   network: StoredNetwork,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct StoredVersion {
+  schema_version: u32,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -27,6 +34,7 @@ struct StoredNetwork {
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(tag = "mode", rename_all = "camelCase")]
 enum StoredProxySettings {
+  System,
   Direct,
   Manual {
     protocol: StoredProxyProtocol,
@@ -148,20 +156,28 @@ fn read_settings_bytes(path: &Path) -> Result<Option<(Settings, Vec<u8>)>, Setti
 }
 
 fn decode_settings(path: &Path, bytes: &[u8]) -> Result<Settings, SettingsError> {
-  let stored: StoredConfig = serde_json::from_slice(bytes).map_err(|error| {
+  let version: StoredVersion = serde_json::from_slice(bytes).map_err(|error| {
     log::warn!("设置文件解析失败 {}: {error}", path.display());
     SettingsError::CorruptConfig {
       path: path.to_path_buf(),
     }
   })?;
 
-  if stored.schema_version != SCHEMA_VERSION {
+  if !(MIN_SCHEMA_VERSION..=SCHEMA_VERSION).contains(&version.schema_version) {
     return Err(SettingsError::UnsupportedVersion {
-      version: stored.schema_version,
+      version: version.schema_version,
     });
   }
 
+  let stored: StoredConfig = serde_json::from_slice(bytes).map_err(|error| {
+    log::warn!("设置文件格式解析失败 {}: {error}", path.display());
+    SettingsError::CorruptConfig {
+      path: path.to_path_buf(),
+    }
+  })?;
+
   let proxy = match stored.network.proxy {
+    StoredProxySettings::System => ProxySettings::System,
     StoredProxySettings::Direct => ProxySettings::Direct,
     StoredProxySettings::Manual {
       protocol,
@@ -230,6 +246,7 @@ fn sync_parent_directory(_path: &Path) -> io::Result<()> {
 impl From<&Settings> for StoredConfig {
   fn from(settings: &Settings) -> Self {
     let proxy = match settings.proxy() {
+      ProxySettings::System => StoredProxySettings::System,
       ProxySettings::Direct => StoredProxySettings::Direct,
       ProxySettings::Manual(proxy) => StoredProxySettings::Manual {
         protocol: proxy.protocol().into(),

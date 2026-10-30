@@ -159,18 +159,23 @@ export function ProxySettingsCard({
               value={[draft.mode]}
               onValueChange={(value) => {
                 const mode = value[0]
-                if (mode === "direct" || mode === "manual") {
+                if (
+                  mode === "system" ||
+                  mode === "direct" ||
+                  mode === "manual"
+                ) {
                   updateDraft({ mode })
                 }
               }}
               variant="outline"
               spacing={2}
             >
-              <ToggleGroupItem value="direct">直连</ToggleGroupItem>
+              <ToggleGroupItem value="system">系统代理</ToggleGroupItem>
               <ToggleGroupItem value="manual">手动代理</ToggleGroupItem>
+              <ToggleGroupItem value="direct">直连</ToggleGroupItem>
             </ToggleGroup>
             <FieldDescription>
-              手动代理模式不会继承终端里的 HTTP_PROXY 或 HTTPS_PROXY。
+              {proxyModeDescription(draft.mode)}
             </FieldDescription>
           </Field>
 
@@ -324,6 +329,17 @@ export function ProxySettingsCard({
       </CardFooter>
     </Card>
   )
+}
+
+function proxyModeDescription(mode: ProxyDraft["mode"]): string {
+  switch (mode) {
+    case "system":
+      return "读取操作系统静态 HTTP/HTTPS 代理；Linux 没有统一系统代理时沿用终端代理环境变量。"
+    case "manual":
+      return "手动代理模式不会继承终端里的 HTTP_PROXY 或 HTTPS_PROXY。"
+    case "direct":
+      return "直连模式不读取系统代理或终端代理环境变量。"
+  }
 }
 
 function formatIpcError(error: unknown): string {

@@ -83,7 +83,7 @@ main.tsx
 | `api.ts` | 调用 `get_settings`、`update_settings` 和 `test_proxy` |
 | `hooks/use-settings.ts` | 管理设置快照，保存成功后应用 Rust 返回的新 revision |
 | `model.ts` | 代理表单草稿与 IPC 配置之间的转换和即时校验 |
-| `components/proxy-settings-card.tsx` | 直连/手动代理、HTTP/SOCKS5H、绕过列表、保存和连接测试 |
+| `components/proxy-settings-card.tsx` | 系统/直连/手动代理、HTTP/SOCKS5H、绕过列表、保存和连接测试 |
 | `index.ts` | 模块公开出口 |
 
 代理密码不在本阶段范围内。代理配置由 Rust 校验并写入 `.devbox/config.json`，前端不保存业务配置副本。

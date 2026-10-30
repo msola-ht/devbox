@@ -1,5 +1,9 @@
 export type ProxyProtocol = "http" | "socks5h"
 
+export interface SystemProxySettings {
+  mode: "system"
+}
+
 export interface DirectProxySettings {
   mode: "direct"
 }
@@ -12,7 +16,8 @@ export interface ManualProxySettings {
   bypass: string[]
 }
 
-export type ProxySettings = DirectProxySettings | ManualProxySettings
+export type ProxySettings =
+  SystemProxySettings | DirectProxySettings | ManualProxySettings
 
 export interface SettingsSnapshot {
   bootId: string

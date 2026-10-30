@@ -11,22 +11,24 @@ pub struct ProxyEndpoint {
   pub bypass: Vec<String>,
 }
 
-#[derive(Clone, Debug, Default)]
-pub struct NetworkRoute {
-  proxy: Option<ProxyEndpoint>,
+#[derive(Clone, Debug)]
+pub enum NetworkRoute {
+  System,
+  Direct,
+  Manual(ProxyEndpoint),
 }
 
 impl NetworkRoute {
+  pub fn system() -> Self {
+    Self::System
+  }
+
   pub fn direct() -> Self {
-    Self { proxy: None }
+    Self::Direct
   }
 
   pub fn manual(proxy: ProxyEndpoint) -> Self {
-    Self { proxy: Some(proxy) }
-  }
-
-  pub fn proxy(&self) -> Option<&ProxyEndpoint> {
-    self.proxy.as_ref()
+    Self::Manual(proxy)
   }
 }
 

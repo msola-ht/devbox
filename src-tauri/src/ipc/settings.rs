@@ -14,6 +14,7 @@ use crate::state::AppState;
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(tag = "mode", rename_all = "camelCase")]
 pub enum ProxySettingsDto {
+  System,
   Direct,
   Manual {
     protocol: ProxyProtocolDto,
@@ -113,6 +114,7 @@ fn build_snapshot(state: &AppState, snapshot: &SettingsSnapshot) -> SettingsSnap
 impl ProxySettingsDto {
   fn into_domain(self) -> Result<ProxySettings, IpcError> {
     match self {
+      Self::System => Ok(ProxySettings::System),
       Self::Direct => Ok(ProxySettings::Direct),
       Self::Manual {
         protocol,
@@ -129,6 +131,7 @@ impl ProxySettingsDto {
 impl From<&ProxySettings> for ProxySettingsDto {
   fn from(proxy: &ProxySettings) -> Self {
     match proxy {
+      ProxySettings::System => Self::System,
       ProxySettings::Direct => Self::Direct,
       ProxySettings::Manual(proxy) => Self::Manual {
         protocol: proxy.protocol().into(),

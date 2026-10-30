@@ -61,7 +61,7 @@ impl SettingsError {
       Self::Conflict { .. } => "设置已被其他窗口修改，请刷新后重试",
       Self::CorruptConfig { .. } => "DevBox 设置文件损坏，且备份无法恢复",
       Self::UnsafeConfigPath { .. } => "DevBox 设置路径不安全，已停止写入",
-      Self::UnsupportedVersion { .. } => "设置文件版本高于当前应用支持范围",
+      Self::UnsupportedVersion { .. } => "设置文件版本不受当前应用支持",
       Self::ReadConfig { .. } => "无法读取 DevBox 设置文件",
       Self::WriteConfig { .. } => "无法保存 DevBox 设置",
       Self::BlockingTaskFailed { .. } => "无法完成 DevBox 设置操作",

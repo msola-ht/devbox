@@ -9,22 +9,27 @@ const MAX_REDIRECTS: usize = 5;
 
 pub fn build_client(route: &NetworkRoute) -> Result<Client, NetworkClientError> {
   let mut builder = Client::builder()
-    .no_proxy()
     .https_only(true)
     .connect_timeout(CONNECT_TIMEOUT)
     .redirect(Policy::limited(MAX_REDIRECTS))
     .user_agent(format!("DevBox/{}", env!("CARGO_PKG_VERSION")));
 
-  if let Some(endpoint) = route.proxy() {
-    let proxy = Proxy::all(&endpoint.url).map_err(|error| NetworkClientError::InvalidProxy {
-      message: error.to_string(),
-    })?;
-    let bypass = if endpoint.bypass.is_empty() {
-      None
-    } else {
-      NoProxy::from_string(&endpoint.bypass.join(","))
-    };
-    builder = builder.proxy(proxy.no_proxy(bypass));
+  match route {
+    NetworkRoute::System => {}
+    NetworkRoute::Direct => {
+      builder = builder.no_proxy();
+    }
+    NetworkRoute::Manual(endpoint) => {
+      let proxy = Proxy::all(&endpoint.url).map_err(|error| NetworkClientError::InvalidProxy {
+        message: error.to_string(),
+      })?;
+      let bypass = if endpoint.bypass.is_empty() {
+        None
+      } else {
+        NoProxy::from_string(&endpoint.bypass.join(","))
+      };
+      builder = builder.no_proxy().proxy(proxy.no_proxy(bypass));
+    }
   }
 
   builder.build().map_err(|error| NetworkClientError::Build {
