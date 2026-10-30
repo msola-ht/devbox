@@ -1,6 +1,7 @@
 import { RefreshCwIcon } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
+import { Spinner } from "@/components/ui/spinner"
 
 export function RefreshButton({
   loading,
@@ -13,10 +14,11 @@ export function RefreshButton({
 }) {
   return (
     <Button variant="outline" onClick={onClick} disabled={loading}>
-      <RefreshCwIcon
-        data-icon="inline-start"
-        className={loading ? "animate-spin" : undefined}
-      />
+      {loading ? (
+        <Spinner data-icon="inline-start" />
+      ) : (
+        <RefreshCwIcon data-icon="inline-start" />
+      )}
       {label}
     </Button>
   )

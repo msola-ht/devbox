@@ -44,7 +44,7 @@ main.rs
 | command | 当前行为 |
 | --- | --- |
 | `get_environment` | 返回启动时检测的 `bootId`、OS 版本、架构、内存、主目录所在卷容量、GPU、用户目录、`.devbox` 路径和目录状态 |
-| `get_settings` | 返回代理配置及其 revision |
+| `get_settings` | 返回代理配置、revision 和当前生效的系统代理读取结果 |
 | `update_settings` | 校验、持久化代理配置并返回新 revision |
 | `test_proxy` | 使用当前输入访问固定 GitHub HTTPS 目标，不读取或修改已保存配置 |
 | `list_tools` | 调用工具链服务；已有缓存时返回权威快照，无缓存时执行检测并缓存 |
@@ -56,8 +56,9 @@ main.rs
 - `ToolListSnapshot`：`bootId`、`revision`、`generatedAt`、`tools`。
 - `ToolSummary`：`toolId`、`displayName`、`description`、`pluginContractVersion`、系统安装、托管安装和 active 安装 ID。
 - `InstallationSummary`：`installationId`、`version`、`path`、`source`、`sourceHint`、`healthy`、`errorCode`。
-- `SettingsSnapshot`：`bootId`、`revision`、`generatedAt` 和 `proxy`。
+- `SettingsSnapshot`：`bootId`、`revision`、`generatedAt`、`proxy` 和 `systemProxy`。
 - `ProxySettings`：`system`、`direct`，或带 `protocol`、`host`、`port`、`bypass` 的 `manual`。
+- `SystemProxyInspection`：`checkedAt`、HTTP/HTTPS 生效代理；每项包含脱敏 URL、`environment` 或 `operatingSystem` 来源和 `requiresAuthentication`。
 - `ProxyTestResult`：`checkedAt`、`latencyMs` 和 `httpStatus`。
 - `IpcError`：稳定 `code`、可展示 `message` 和可选 `details`。
 
@@ -114,6 +115,7 @@ Python 提供系统解释器检测。版本目录、安装、验证和激活通�
 - 工具链 revision 和最新快照缓存归 `ToolchainService`，revision 在检测开始时分配并在进程内单调递增。
 - 并发刷新不会让较低 revision 覆盖已缓存的较高 revision。
 - 系统安装候选发现和托管安装扫描通过 `spawn_blocking` 脱离异步执行器，避免阻塞文件操作占住 Tokio 工作线程。
+- 系统代理读取通过 `spawn_blocking` 执行；设置服务将网络适配结果转换为设置模块模型，IPC 不依赖基础设施类型。
 - 设置更新由单一写入线程串行完成版本检查、重新验证和文件写入；锁只保护短时内存快照，`expectedRevision` 阻止旧窗口覆盖新设置。
 - 前端快照 Store 合并同一业务查询；Rust 单飞探测、任务注册表和跨进程锁随操作服务建立。
 - 前端断连或被销毁不影响当前只读检测；后台写任务归 `operations` 状态机。
@@ -124,7 +126,7 @@ Python 提供系统解释器检测。版本目录、安装、验证和激活通�
 - 版本命令使用绝对可执行路径和参数数组，不使用 Shell；清空环境后仅保留 Windows 运行所需的最小系统变量。
 - 版本探测有 3 秒超时、stdout/stderr 各 64 KiB 上限，并终止直接子进程。
 - PATH 中的相对目录会被跳过，避免执行当前工作目录中的同名程序。
-- 系统模式使用 reqwest 读取操作系统静态 HTTP/HTTPS 代理，Linux 无统一系统代理时使用代理环境变量；直连和手动模式显式关闭自动代理，手动路由只使用保存的主机和端口。目的地强制 HTTPS，重定向最多 5 次。
+- 系统模式使用 reqwest 读取操作系统静态 HTTP/HTTPS 代理，Linux 无统一系统代理时使用代理环境变量；设置快照使用同一代理匹配器返回实际生效路由，按最终选中路由区分环境变量与系统设置来源，并只暴露脱敏 URL 和认证需求。直连和手动模式显式关闭自动代理，手动路由只使用保存的主机和端口。目的地强制 HTTPS，重定向最多 5 次。
 - 下载任务应在开始时捕获当次网络路由，执行期间保持同一代理；设置变更只影响之后开始的任务。
 - 代理测试只访问固定官方目标，不接受前端传入任意 URL；代理不要求账号密码，407 返回 `PROXY_AUTH_UNSUPPORTED`。
 - `build.rs` 为六个自定义 command 生成 allow/deny ACL；`capabilities/default.json` 只向 `main` 窗口放行这些命令。

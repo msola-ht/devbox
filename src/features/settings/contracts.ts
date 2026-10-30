@@ -19,11 +19,26 @@ export interface ManualProxySettings {
 export type ProxySettings =
   SystemProxySettings | DirectProxySettings | ManualProxySettings
 
+export type SystemProxySource = "environment" | "operatingSystem"
+
+export interface SystemProxyEndpoint {
+  url: string
+  source: SystemProxySource
+  requiresAuthentication: boolean
+}
+
+export interface SystemProxyInspection {
+  checkedAt: string
+  http: SystemProxyEndpoint | null
+  https: SystemProxyEndpoint | null
+}
+
 export interface SettingsSnapshot {
   bootId: string
   revision: string
   generatedAt: string
   proxy: ProxySettings
+  systemProxy: SystemProxyInspection
 }
 
 export interface UpdateSettingsRequest {

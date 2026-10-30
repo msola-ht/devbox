@@ -8,6 +8,7 @@ use super::now_rfc3339;
 use crate::infrastructure::network::NetworkClientError;
 use crate::modules::settings::{
   ManualProxySettings, ProxyProtocol, ProxySettings, SettingsError, SettingsSnapshot,
+  SystemProxyEndpoint, SystemProxyInspection, SystemProxySource,
 };
 use crate::state::AppState;
 
@@ -52,6 +53,7 @@ pub struct SettingsSnapshotDto {
   revision: String,
   generated_at: String,
   proxy: ProxySettingsDto,
+  system_proxy: SystemProxyDto,
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -62,10 +64,38 @@ pub struct ProxyTestResultDto {
   http_status: u16,
 }
 
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct SystemProxyDto {
+  checked_at: String,
+  http: Option<SystemProxyEndpointDto>,
+  https: Option<SystemProxyEndpointDto>,
+}
+
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct SystemProxyEndpointDto {
+  url: String,
+  source: SystemProxySourceDto,
+  requires_authentication: bool,
+}
+
+#[derive(Clone, Copy, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+enum SystemProxySourceDto {
+  Environment,
+  OperatingSystem,
+}
+
 #[tauri::command]
 pub async fn get_settings(state: State<'_, AppState>) -> Result<SettingsSnapshotDto, IpcError> {
   let snapshot = state.settings.get().map_err(map_settings_error)?;
-  Ok(build_snapshot(&state, &snapshot))
+  let system_proxy = state
+    .settings
+    .inspect_system_proxy()
+    .await
+    .map_err(map_settings_error)?;
+  Ok(build_snapshot(&state, &snapshot, system_proxy))
 }
 
 #[tauri::command]
@@ -76,12 +106,17 @@ pub async fn update_settings(
   let expected_revision = u64::from_str(&request.expected_revision)
     .map_err(|_| IpcError::new("INVALID_INPUT", "设置版本号格式无效"))?;
   let proxy = request.proxy.into_domain()?;
+  let system_proxy = state
+    .settings
+    .inspect_system_proxy()
+    .await
+    .map_err(map_settings_error)?;
   let snapshot = state
     .settings
     .update(expected_revision, proxy)
     .await
     .map_err(map_settings_error)?;
-  Ok(build_snapshot(&state, &snapshot))
+  Ok(build_snapshot(&state, &snapshot, system_proxy))
 }
 
 #[tauri::command]
@@ -102,12 +137,46 @@ pub async fn test_proxy(
   })
 }
 
-fn build_snapshot(state: &AppState, snapshot: &SettingsSnapshot) -> SettingsSnapshotDto {
+fn build_snapshot(
+  state: &AppState,
+  snapshot: &SettingsSnapshot,
+  system_proxy: SystemProxyInspection,
+) -> SettingsSnapshotDto {
   SettingsSnapshotDto {
     boot_id: state.boot_id.clone(),
     revision: snapshot.revision.to_string(),
     generated_at: now_rfc3339(),
     proxy: ProxySettingsDto::from(snapshot.settings.proxy()),
+    system_proxy: SystemProxyDto {
+      checked_at: now_rfc3339(),
+      http: system_proxy
+        .http()
+        .cloned()
+        .map(SystemProxyEndpointDto::from),
+      https: system_proxy
+        .https()
+        .cloned()
+        .map(SystemProxyEndpointDto::from),
+    },
+  }
+}
+
+impl From<SystemProxyEndpoint> for SystemProxyEndpointDto {
+  fn from(endpoint: SystemProxyEndpoint) -> Self {
+    Self {
+      url: endpoint.url().to_string(),
+      source: endpoint.source().into(),
+      requires_authentication: endpoint.requires_authentication(),
+    }
+  }
+}
+
+impl From<SystemProxySource> for SystemProxySourceDto {
+  fn from(source: SystemProxySource) -> Self {
+    match source {
+      SystemProxySource::Environment => Self::Environment,
+      SystemProxySource::OperatingSystem => Self::OperatingSystem,
+    }
   }
 }
 

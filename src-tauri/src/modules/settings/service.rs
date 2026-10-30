@@ -3,9 +3,14 @@ use std::sync::{Arc, RwLock};
 use std::thread;
 use std::time::{Duration, Instant};
 
-use super::{ProxySettings, Settings, SettingsError};
+use super::{
+  ProxySettings, Settings, SettingsError, SystemProxyEndpoint, SystemProxyInspection,
+  SystemProxySource,
+};
 use crate::infrastructure::network::{
-  NetworkClientError, NetworkRoute, ProxyEndpoint, build_client,
+  NetworkClientError, NetworkRoute, ProxyEndpoint, SystemProxyEndpoint as DetectedProxyEndpoint,
+  SystemProxyInspection as DetectedProxyInspection, SystemProxySource as DetectedProxySource,
+  build_client, inspect_system_proxy as detect_system_proxy,
 };
 use crate::infrastructure::path::DevboxLayout;
 
@@ -148,6 +153,15 @@ impl SettingsService {
     })
   }
 
+  pub async fn inspect_system_proxy(&self) -> Result<SystemProxyInspection, SettingsError> {
+    let inspection = tokio::task::spawn_blocking(detect_system_proxy)
+      .await
+      .map_err(|error| SettingsError::BlockingTaskFailed {
+        message: error.to_string(),
+      })?;
+    Ok(inspection.into())
+  }
+
   fn unavailable_error(&self) -> Result<SettingsError, SettingsError> {
     let state = self
       .state
@@ -163,6 +177,34 @@ impl SettingsService {
       code: error.code,
       message: error.message,
     })
+  }
+}
+
+impl From<DetectedProxyInspection> for SystemProxyInspection {
+  fn from(inspection: DetectedProxyInspection) -> Self {
+    Self::new(
+      inspection.http.map(SystemProxyEndpoint::from),
+      inspection.https.map(SystemProxyEndpoint::from),
+    )
+  }
+}
+
+impl From<DetectedProxyEndpoint> for SystemProxyEndpoint {
+  fn from(endpoint: DetectedProxyEndpoint) -> Self {
+    Self::new(
+      endpoint.url,
+      endpoint.source.into(),
+      endpoint.requires_authentication,
+    )
+  }
+}
+
+impl From<DetectedProxySource> for SystemProxySource {
+  fn from(source: DetectedProxySource) -> Self {
+    match source {
+      DetectedProxySource::Environment => Self::Environment,
+      DetectedProxySource::OperatingSystem => Self::OperatingSystem,
+    }
   }
 }
 

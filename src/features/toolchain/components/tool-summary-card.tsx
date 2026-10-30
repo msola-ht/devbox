@@ -1,6 +1,7 @@
 import {
   CheckCircle2Icon,
   HardDriveIcon,
+  PackageOpenIcon,
   PackageIcon,
   TerminalIcon,
   TriangleAlertIcon,
@@ -15,6 +16,7 @@ import {
   installationKey,
   isActiveManagedInstallation,
 } from "@/features/toolchain/model"
+import { Badge } from "@/components/ui/badge"
 import {
   Card,
   CardAction,
@@ -24,6 +26,22 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card"
+import {
+  Empty,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+} from "@/components/ui/empty"
+import {
+  Item,
+  ItemActions,
+  ItemContent,
+  ItemDescription,
+  ItemGroup,
+  ItemMedia,
+  ItemTitle,
+} from "@/components/ui/item"
 
 function InstallationRow({
   installation,
@@ -38,34 +56,34 @@ function InstallationRow({
       : (installation.sourceHint ?? "系统安装")
 
   return (
-    <div className="rounded-lg border bg-muted/30 p-3">
-      <div className="flex flex-wrap items-start justify-between gap-2">
-        <div className="flex min-w-0 items-center gap-2">
-          <TerminalIcon className="size-4 shrink-0 text-muted-foreground" />
-          <span className="font-mono text-sm font-medium">
-            {installation.version ?? "版本未知"}
-          </span>
-          {active ? (
-            <span className="inline-flex items-center gap-1 rounded-full bg-primary px-2 py-0.5 text-[11px] text-primary-foreground">
-              <CheckCircle2Icon className="size-3" />
-              当前
-            </span>
-          ) : null}
-        </div>
-        <span className="rounded-full bg-muted px-2 py-0.5 text-[11px] text-muted-foreground">
-          {sourceLabel}
-        </span>
-      </div>
-      <p className="mt-2 font-mono text-xs leading-5 break-all text-muted-foreground">
-        {installation.path}
-      </p>
-      {!installation.healthy ? (
-        <p className="mt-2 flex items-center gap-1 text-xs text-destructive">
-          <TriangleAlertIcon className="size-3.5" />
-          {installation.errorCode ?? "安装状态异常"}
-        </p>
-      ) : null}
-    </div>
+    <Item variant="muted" size="sm" className="items-start">
+      <ItemMedia variant="icon">
+        <TerminalIcon className="text-muted-foreground" />
+      </ItemMedia>
+      <ItemContent>
+        <ItemTitle className="font-mono">
+          {installation.version ?? "版本未知"}
+        </ItemTitle>
+        <ItemDescription className="line-clamp-none font-mono text-xs break-all">
+          {installation.path}
+        </ItemDescription>
+        {!installation.healthy ? (
+          <Badge variant="destructive">
+            <TriangleAlertIcon data-icon="inline-start" />
+            {installation.errorCode ?? "安装状态异常"}
+          </Badge>
+        ) : null}
+      </ItemContent>
+      <ItemActions className="flex-col items-end gap-1">
+        {active ? (
+          <Badge>
+            <CheckCircle2Icon data-icon="inline-start" />
+            当前
+          </Badge>
+        ) : null}
+        <Badge variant="secondary">{sourceLabel}</Badge>
+      </ItemActions>
+    </Item>
   )
 }
 
@@ -85,27 +103,26 @@ export function ToolSummaryCard({ tool }: { tool: ToolSummary }) {
         </CardTitle>
         <CardDescription>{tool.description}</CardDescription>
         <CardAction>
-          <span
-            className={
-              status.active
-                ? "rounded-full bg-primary px-2.5 py-1 text-xs text-primary-foreground"
-                : "rounded-full bg-muted px-2.5 py-1 text-xs text-muted-foreground"
-            }
-          >
+          <Badge variant={status.active ? "default" : "secondary"}>
             {status.label}
-          </span>
+          </Badge>
         </CardAction>
       </CardHeader>
-      <CardContent className="space-y-4">
+      <CardContent className="flex flex-col gap-4">
         {allInstallations.length === 0 ? (
-          <div className="rounded-lg border border-dashed p-6 text-center">
-            <p className="text-sm font-medium">未发现 {tool.displayName}</p>
-            <p className="mt-1 text-xs leading-5 text-muted-foreground">
-              当前阶段只执行只读检测，安装与版本切换将在后续阶段接入。
-            </p>
-          </div>
+          <Empty className="border">
+            <EmptyHeader>
+              <EmptyMedia variant="icon">
+                <PackageOpenIcon />
+              </EmptyMedia>
+              <EmptyTitle>未发现 {tool.displayName}</EmptyTitle>
+              <EmptyDescription>
+                当前阶段只执行只读检测，安装与版本切换将在后续阶段接入。
+              </EmptyDescription>
+            </EmptyHeader>
+          </Empty>
         ) : (
-          <div className="space-y-2">
+          <ItemGroup className="gap-2">
             {allInstallations.map((installation) => (
               <InstallationRow
                 key={installationKey(installation)}
@@ -113,7 +130,7 @@ export function ToolSummaryCard({ tool }: { tool: ToolSummary }) {
                 active={isActiveManagedInstallation(tool, installation)}
               />
             ))}
-          </div>
+          </ItemGroup>
         )}
       </CardContent>
       <CardFooter className="gap-2 text-xs text-muted-foreground">

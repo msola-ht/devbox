@@ -1,5 +1,6 @@
 import { TriangleAlertIcon } from "lucide-react"
 
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
 import {
   Card,
@@ -23,7 +24,7 @@ export function QueryLoadingCard({
         <CardTitle>{title}</CardTitle>
         <CardDescription>{description}</CardDescription>
       </CardHeader>
-      <CardContent className="space-y-3">
+      <CardContent className="flex flex-col gap-3">
         <Skeleton className="h-4 w-2/3" />
         <Skeleton className="h-4 w-1/2" />
         <Skeleton className="h-10 w-full" />
@@ -73,9 +74,13 @@ export function QueryErrorNotice({
   suffix?: string
 }) {
   return (
-    <div className="rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2 text-xs text-destructive">
-      {code} · {message}
-      {suffix ? `，${suffix}` : null}
-    </div>
+    <Alert variant="destructive">
+      <TriangleAlertIcon />
+      <AlertTitle>数据刷新失败</AlertTitle>
+      <AlertDescription>
+        {code} · {message}
+        {suffix ? `。${suffix}` : null}
+      </AlertDescription>
+    </Alert>
   )
 }

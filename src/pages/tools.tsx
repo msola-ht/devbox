@@ -8,6 +8,8 @@ import {
   QueryLoadingCard,
 } from "@/components/query-state-card"
 import { RefreshButton } from "@/components/refresh-button"
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
+import { Badge } from "@/components/ui/badge"
 import {
   Card,
   CardAction,
@@ -36,7 +38,7 @@ export function ToolsPage() {
   return (
     <Page>
       <section className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-        <div className="space-y-2">
+        <div className="flex flex-col gap-2">
           <p className="text-sm font-medium text-muted-foreground">工具</p>
           <h1 className="font-heading text-3xl font-semibold tracking-tight">
             工具管理
@@ -59,35 +61,36 @@ export function ToolsPage() {
             DevBox 管理的工具、缓存和状态都保存在这里
           </CardDescription>
           <CardAction>
-            <span
-              className={
-                devboxUnavailable
-                  ? "rounded-full bg-destructive/10 px-2.5 py-1 text-xs text-destructive"
-                  : "rounded-full bg-muted px-2.5 py-1 text-xs text-muted-foreground"
-              }
-            >
+            <Badge variant={devboxUnavailable ? "destructive" : "secondary"}>
               {devboxStatus}
-            </span>
+            </Badge>
           </CardAction>
         </CardHeader>
         <CardContent>
           {environment.state.data ? (
-            <div className="flex flex-col gap-1">
+            <div className="flex flex-col gap-2">
               <p className="font-mono text-xs leading-5 break-all">
                 {environment.state.data.devboxRoot}
               </p>
               {environment.state.data.devboxError ? (
-                <p className="flex items-start gap-1 text-xs break-words text-destructive">
-                  <TriangleAlertIcon className="size-3.5 shrink-0" />
-                  {environment.state.data.devboxError}
-                </p>
+                <Alert variant="destructive">
+                  <TriangleAlertIcon />
+                  <AlertTitle>托管目录异常</AlertTitle>
+                  <AlertDescription>
+                    {environment.state.data.devboxError}
+                  </AlertDescription>
+                </Alert>
               ) : null}
             </div>
           ) : environment.state.error ? (
-            <p className="flex items-center gap-1 text-xs text-destructive">
-              <TriangleAlertIcon className="size-3.5" />
-              {environment.state.error.code} · {environment.state.error.message}
-            </p>
+            <Alert variant="destructive">
+              <TriangleAlertIcon />
+              <AlertTitle>无法读取托管目录</AlertTitle>
+              <AlertDescription>
+                {environment.state.error.code} ·{" "}
+                {environment.state.error.message}
+              </AlertDescription>
+            </Alert>
           ) : (
             <Skeleton className="h-4 w-2/3" />
           )}

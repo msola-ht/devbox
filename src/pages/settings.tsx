@@ -16,8 +16,7 @@ export function SettingsPage() {
           网络与下载
         </h1>
         <p className="max-w-2xl text-sm leading-6 text-muted-foreground">
-          为后续版本目录和工具下载配置代理。代理只影响 DevBox
-          自己的网络请求，不改变系统工具或终端环境。
+          配置版本查询和工具下载使用的代理。
         </p>
       </header>
 

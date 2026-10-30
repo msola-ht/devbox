@@ -16,7 +16,7 @@ export function DashboardPage() {
   return (
     <Page>
       <section className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-        <div className="space-y-2">
+        <div className="flex flex-col gap-2">
           <h1 className="font-heading text-3xl font-semibold tracking-tight">
             本机工具链
           </h1>
@@ -49,7 +49,7 @@ export function DashboardPage() {
         <QueryLoadingCard title="本机环境" />
       )}
 
-      <section className="space-y-4">
+      <section className="flex flex-col gap-4">
         <div className="flex flex-wrap items-end justify-between gap-2">
           <div>
             <h2 className="font-heading text-lg font-semibold">工具状态</h2>

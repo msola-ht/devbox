@@ -18,6 +18,7 @@ import {
   SidebarProvider,
   SidebarTrigger,
 } from "@/components/ui/sidebar"
+import { Toaster } from "@/components/ui/toast"
 import { TooltipProvider } from "@/components/ui/tooltip"
 import { useTheme } from "@/components/theme-provider"
 
@@ -85,6 +86,7 @@ export function AppLayout() {
             </div>
           </ScrollArea>
         </SidebarInset>
+        <Toaster />
       </SidebarProvider>
     </TooltipProvider>
   )

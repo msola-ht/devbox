@@ -43,7 +43,7 @@ main.tsx
 | --- | --- | --- |
 | [dashboard.tsx](pages/dashboard.tsx) | `#/` | 本机环境、已注册工具、加载/失败/空注册表状态和刷新 |
 | [tools.tsx](pages/tools.tsx) | `#/tools` | 托管目录状态、工具安装列表和刷新 |
-| [settings.tsx](pages/settings.tsx) | `#/settings` | 下载代理模式、地址、绕过列表、保存和连接测试 |
+| [settings.tsx](pages/settings.tsx) | `#/settings` | 下载代理模式、系统代理读取结果、地址、绕过列表、保存和连接测试 |
 | [not-found.tsx](pages/not-found.tsx) | 未匹配路径 | 404 和返回概览 |
 
 页面通过应用组合层协调多个业务模块，只组合公开出口和基础 UI 组件，不拼接 Tauri command 名。
@@ -79,14 +79,16 @@ main.tsx
 
 | 文件 | 职责 |
 | --- | --- |
-| `contracts.ts` | `SettingsSnapshot`、`ProxySettings` 和代理测试结果 |
+| `contracts.ts` | `SettingsSnapshot`、系统代理读取结果、`ProxySettings` 和代理测试结果 |
 | `api.ts` | 调用 `get_settings`、`update_settings` 和 `test_proxy` |
 | `hooks/use-settings.ts` | 管理设置快照，保存成功后应用 Rust 返回的新 revision |
+| `hooks/use-proxy-settings-form.ts` | 管理代理编辑草稿、校验、保存、测试和过期响应 |
 | `model.ts` | 代理表单草稿与 IPC 配置之间的转换和即时校验 |
-| `components/proxy-settings-card.tsx` | 系统/直连/手动代理、HTTP/SOCKS5H、绕过列表、保存和连接测试 |
+| `components/proxy-settings-card.tsx` | 组合模式选择、手动代理字段、反馈和操作按钮 |
+| `components/system-proxy-summary.tsx` | 展示系统代理 HTTP/HTTPS 路由、来源、读取时间和认证需求 |
 | `index.ts` | 模块公开出口 |
 
-代理密码不在本阶段范围内。代理配置由 Rust 校验并写入 `.devbox/config.json`，前端不保存业务配置副本。
+代理密码不在本阶段范围内。代理配置由 Rust 校验并写入 `.devbox/config.json`，前端不保存业务配置副本。系统代理结果只展示脱敏后的实际 HTTP/HTTPS 路由、来源和认证需求。
 
 ## 通信与快照状态
 

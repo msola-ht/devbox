@@ -76,6 +76,61 @@ pub enum ProxySettings {
   Manual(ManualProxySettings),
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SystemProxySource {
+  Environment,
+  OperatingSystem,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct SystemProxyEndpoint {
+  url: String,
+  source: SystemProxySource,
+  requires_authentication: bool,
+}
+
+impl SystemProxyEndpoint {
+  pub(super) fn new(url: String, source: SystemProxySource, requires_authentication: bool) -> Self {
+    Self {
+      url,
+      source,
+      requires_authentication,
+    }
+  }
+
+  pub fn url(&self) -> &str {
+    &self.url
+  }
+
+  pub fn source(&self) -> SystemProxySource {
+    self.source
+  }
+
+  pub fn requires_authentication(&self) -> bool {
+    self.requires_authentication
+  }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct SystemProxyInspection {
+  http: Option<SystemProxyEndpoint>,
+  https: Option<SystemProxyEndpoint>,
+}
+
+impl SystemProxyInspection {
+  pub(super) fn new(http: Option<SystemProxyEndpoint>, https: Option<SystemProxyEndpoint>) -> Self {
+    Self { http, https }
+  }
+
+  pub fn http(&self) -> Option<&SystemProxyEndpoint> {
+    self.http.as_ref()
+  }
+
+  pub fn https(&self) -> Option<&SystemProxyEndpoint> {
+    self.https.as_ref()
+  }
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Settings {
   proxy: ProxySettings,

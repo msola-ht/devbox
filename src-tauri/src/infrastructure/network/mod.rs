@@ -1,9 +1,13 @@
 mod client;
+mod system_proxy;
 
 use std::error::Error;
 use std::fmt;
 
 pub use client::build_client;
+pub use system_proxy::{
+  SystemProxyEndpoint, SystemProxyInspection, SystemProxySource, inspect_system_proxy,
+};
 
 #[derive(Clone, Debug)]
 pub struct ProxyEndpoint {
