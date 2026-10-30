@@ -7,6 +7,7 @@ use infrastructure::path::{DevboxLayout, devbox_root, ensure_layout};
 use modules::environment::{
   EnvironmentInfo, EnvironmentService, detect_system_profile,
 };
+use modules::settings::SettingsService;
 use modules::toolchain::{PluginRegistry, PythonPlugin, ToolchainService, UvPlugin};
 use state::AppState;
 use tauri::Manager;
@@ -21,8 +22,9 @@ pub fn run() {
       let devbox_error = ensure_layout(&root)
         .err()
         .map(|error| format!("无法初始化 .devbox 目录: {error}"));
+      let devbox_ready = devbox_error.is_none();
 
-      if devbox_error.is_none() {
+      if devbox_ready {
         let mut targets = vec![Target::new(TargetKind::Folder {
           path: root.join("logs"),
           file_name: Some("devbox".to_string()),
@@ -60,20 +62,35 @@ pub fn run() {
         gpu_core_count: profile.gpu_core_count,
         home_dir: home_dir.clone(),
         devbox_root: root.clone(),
-        devbox_ready: devbox_error.is_none(),
+        devbox_ready,
         devbox_error,
       });
       let registry = PluginRegistry::new(vec![
         Box::new(UvPlugin),
         Box::new(PythonPlugin),
       ]);
-      let toolchain = ToolchainService::new(registry, DevboxLayout::new(root));
-      app.manage(AppState::new(environment, toolchain));
+      let layout = DevboxLayout::new(root);
+      let settings = if !devbox_ready {
+        SettingsService::unavailable("SETTINGS_UNAVAILABLE", "无法完成 DevBox 设置操作")
+      } else {
+        match SettingsService::new(layout.clone()) {
+          Ok(settings) => settings,
+          Err(error) => {
+            log::error!("无法加载设置: {error}");
+            SettingsService::unavailable(error.code(), error.user_message())
+          }
+        }
+      };
+      let toolchain = ToolchainService::new(registry, layout);
+      app.manage(AppState::new(environment, settings, toolchain));
 
       Ok(())
     })
     .invoke_handler(tauri::generate_handler![
       ipc::environment::get_environment,
+      ipc::settings::get_settings,
+      ipc::settings::update_settings,
+      ipc::settings::test_proxy,
       ipc::toolchain::list_tools,
       ipc::toolchain::refresh_tools,
     ])

@@ -23,6 +23,14 @@ impl DevboxLayout {
       .join("active")
       .join(format!("{tool_id}.json"))
   }
+
+  pub fn config_file(&self) -> PathBuf {
+    self.root.join("config.json")
+  }
+
+  pub fn config_backup_file(&self) -> PathBuf {
+    self.root.join("config.json.bak")
+  }
 }
 
 pub fn devbox_root(home_dir: &Path) -> PathBuf {

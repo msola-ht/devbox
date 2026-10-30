@@ -2,7 +2,7 @@
 
 [文档索引](../docs/README.md) · [架构设计](../docs/architecture.md) · [后端规则](AGENTS.md) · [前端模块说明](../src/README.md) · [开发指南](../docs/development.md)
 
-本文描述当前 Rust 与 Tauri 实现。当前后端提供 `.devbox` 初始化、环境快照、uv 与 Python 系统检测、托管安装扫描和工具快照缓存；安装、任务、持久化迁移和业务事件按开发指南的实施顺序进入后端模块。
+本文描述当前 Rust 与 Tauri 实现。当前后端提供 `.devbox` 初始化、环境快照、uv 与 Python 系统检测、托管安装扫描、工具快照缓存、代理设置持久化和连接测试；安装、任务、完整持久化迁移和业务事件按开发指南的实施顺序进入后端模块。
 
 ## 启动与组合
 
@@ -15,10 +15,12 @@ main.rs
         ensure_layout
         log -> ~/.devbox/logs
         EnvironmentService
+        SettingsService -> config.json
         PluginRegistry(UvPlugin, PythonPlugin) + DevboxLayout + ToolchainService
         manage(AppState)
       invoke_handler
-        get_environment / list_tools / refresh_tools
+        get_environment / get_settings / update_settings / test_proxy
+        / list_tools / refresh_tools
       run
 ```
 
@@ -29,9 +31,11 @@ main.rs
 | [state.rs](src/state.rs) | 保存 `bootId` 和已组装服务；业务缓存归所属服务 |
 | [ipc/](src/ipc) | command 边界、响应 DTO 和错误 DTO |
 | [modules/environment/](src/modules/environment) | 启动时固定的 OS、硬件规格、用户目录和 `.devbox` 状态 |
+| [modules/settings/](src/modules/settings) | 代理配置模型、校验、版本化持久化、原子写入和连接测试 |
 | [modules/toolchain/](src/modules/toolchain) | 工具模型、检测应用服务、快照缓存、类型化错误、插件契约和注册表 |
 | [infrastructure/path.rs](src/infrastructure/path.rs) | `.devbox` 布局、权限和目录安全校验 |
 | [infrastructure/process.rs](src/infrastructure/process.rs) | 受控版本命令执行、超时和输出上限 |
+| [infrastructure/network/](src/infrastructure/network) | 根据直连或手动代理路由构建 HTTPS 客户端 |
 
 系统规格在应用启动时检测一次；当前 macOS 覆盖版本、内存、卷容量和 GPU，Linux 覆盖版本、内存和容量，Windows 仅覆盖版本。未实现的字段以 `null` 返回。
 
@@ -40,6 +44,9 @@ main.rs
 | command | 当前行为 |
 | --- | --- |
 | `get_environment` | 返回启动时检测的 `bootId`、OS 版本、架构、内存、主目录所在卷容量、GPU、用户目录、`.devbox` 路径和目录状态 |
+| `get_settings` | 返回代理配置及其 revision |
+| `update_settings` | 校验、持久化代理配置并返回新 revision |
+| `test_proxy` | 使用当前输入访问固定 GitHub HTTPS 目标，不读取或修改已保存配置 |
 | `list_tools` | 调用工具链服务；已有缓存时返回权威快照，无缓存时执行检测并缓存 |
 | `refresh_tools` | 调用工具链服务重新检测并分配新 revision |
 
@@ -49,15 +56,18 @@ main.rs
 - `ToolListSnapshot`：`bootId`、`revision`、`generatedAt`、`tools`。
 - `ToolSummary`：`toolId`、`displayName`、`description`、`pluginContractVersion`、系统安装、托管安装和 active 安装 ID。
 - `InstallationSummary`：`installationId`、`version`、`path`、`source`、`sourceHint`、`healthy`、`errorCode`。
+- `SettingsSnapshot`：`bootId`、`revision`、`generatedAt` 和 `proxy`。
+- `ProxySettings`：`direct`，或带 `protocol`、`host`、`port`、`bypass` 的 `manual`。
+- `ProxyTestResult`：`checkedAt`、`latencyMs` 和 `httpStatus`。
 - `IpcError`：稳定 `code`、可展示 `message` 和可选 `details`。
 
-环境快照在启动时固定，`revision` 为 `"1"`；工具链快照的 `revision` 随检测递增。
+环境快照在启动时固定，`revision` 为 `"1"`；工具链快照的 `revision` 随检测递增，设置 revision 随成功写入递增。
 
 JSON 字段为 camelCase；标识符、revision 和契约版本以字符串传输；时间使用 UTC RFC 3339。Rust 当前没有自动生成 TypeScript 类型，`src/features/**/contracts.ts` 由人工保持一一对应。
 
 工具链内部模型不派生 Serde；`ipc/toolchain.rs` 显式映射独立 DTO，领域字段和传输字段不共享类型。
 
-当前业务错误码包括 `TOOLS_DIRECTORY_UNAVAILABLE`、`TOOLS_DIRECTORY_UNSAFE` 和用于阻塞任务异常的 `TOOLS_SCAN_FAILED`；安装项诊断包括 `SYSTEM_PROBE_FAILED`、`VERSION_OUTPUT_UNRECOGNIZED` 和 `INSTALLATION_DAMAGED`。前端传输层另有 `IPC_TRANSPORT_FAILED`、`DESKTOP_UNAVAILABLE` 和 `STALE_SNAPSHOT`。
+当前业务错误码包括 `TOOLS_DIRECTORY_UNAVAILABLE`、`TOOLS_DIRECTORY_UNSAFE`、`TOOLS_SCAN_FAILED`、`SETTINGS_CONFLICT`、`SETTINGS_CORRUPT`、`SETTINGS_VERSION_UNSUPPORTED`、`PROXY_CONNECTION_FAILED` 和 `PROXY_AUTH_UNSUPPORTED`；安装项诊断包括 `SYSTEM_PROBE_FAILED`、`VERSION_OUTPUT_UNRECOGNIZED` 和 `INSTALLATION_DAMAGED`。前端传输层另有 `IPC_TRANSPORT_FAILED`、`DESKTOP_UNAVAILABLE` 和 `STALE_SNAPSHOT`。
 
 ## 工具插件
 
@@ -94,7 +104,7 @@ Python 提供系统解释器检测。版本目录、安装、验证和激活通�
 - active 指针读取 `state/active/<tool>.json`，校验格式版本、工具归属，并只在指向健康托管安装时对外返回。
 - `DevboxLayout` 集中提供托管工具根目录和 active 指针位置，工具链服务不直接拼接目录语义。
 
-当前没有写入 manifest、active 指针或 `.devbox/bin` 的代码，也没有原子替换、备份迁移或跨进程锁。
+代理设置写入 `.devbox/config.json`，使用独立 `schemaVersion`、同目录临时文件、原子替换和 `config.json.bak` 备份；保存前先验证现有文件，损坏内容不会覆盖有效备份。Unix 文件权限为 `0600`。当前没有写入托管 manifest、active 指针或 `.devbox/bin` 的代码，也没有安装库存的备份迁移或跨进程锁。
 
 安装链路接入后，托管安装清单与 active 指针的唯一写入入口归 `toolchain` 库存服务；`operations` 提交验证通过的安装计划，不直接写这些文件。
 
@@ -104,6 +114,7 @@ Python 提供系统解释器检测。版本目录、安装、验证和激活通�
 - 工具链 revision 和最新快照缓存归 `ToolchainService`，revision 在检测开始时分配并在进程内单调递增。
 - 并发刷新不会让较低 revision 覆盖已缓存的较高 revision。
 - 系统安装候选发现和托管安装扫描通过 `spawn_blocking` 脱离异步执行器，避免阻塞文件操作占住 Tokio 工作线程。
+- 设置更新由单一写入线程串行完成版本检查、重新验证和文件写入；锁只保护短时内存快照，`expectedRevision` 阻止旧窗口覆盖新设置。
 - 前端快照 Store 合并同一业务查询；Rust 单飞探测、任务注册表和跨进程锁随操作服务建立。
 - 前端断连或被销毁不影响当前只读检测；后台写任务归 `operations` 状态机。
 
@@ -113,16 +124,19 @@ Python 提供系统解释器检测。版本目录、安装、验证和激活通�
 - 版本命令使用绝对可执行路径和参数数组，不使用 Shell；清空环境后仅保留 Windows 运行所需的最小系统变量。
 - 版本探测有 3 秒超时、stdout/stderr 各 64 KiB 上限，并终止直接子进程。
 - PATH 中的相对目录会被跳过，避免执行当前工作目录中的同名程序。
-- `build.rs` 为三个自定义 command 生成 allow/deny ACL；`capabilities/default.json` 只向 `main` 窗口放行这三个命令。
+- 代理连接显式关闭 reqwest 的环境变量代理继承，只使用保存的直连或手动路由；目的地强制 HTTPS，重定向最多 5 次。
+- 下载任务应在开始时捕获当次网络路由，执行期间保持同一代理；设置变更只影响之后开始的任务。
+- 代理测试只访问固定官方目标，不接受前端传入任意 URL；代理不要求账号密码，407 返回 `PROXY_AUTH_UNSUPPORTED`。
+- `build.rs` 为六个自定义 command 生成 allow/deny ACL；`capabilities/default.json` 只向 `main` 窗口放行这些命令。
 
 ## 构建与配置
 
 | 文件 | 当前配置 |
 | --- | --- |
-| [Cargo.toml](Cargo.toml) | edition 2024、Tauri 2、Serde、Tokio、UUID、time 和日志依赖 |
+| [Cargo.toml](Cargo.toml) | edition 2024、Tauri 2、Serde、Tokio、UUID、time、reqwest 和日志依赖 |
 | [build.rs](build.rs) | Tauri build 和自定义 command AppManifest |
 | [tauri.conf.json](tauri.conf.json) | DevBox 标识、主窗口、开发地址、前端产物和打包配置 |
-| [capabilities/default.json](capabilities/default.json) | main 窗口的 `core:default` 与三个业务命令权限 |
+| [capabilities/default.json](capabilities/default.json) | main 窗口的 `core:default` 与六个业务命令权限 |
 | `tauri.<platform>.conf.json` | 各平台打包目标；没有实际原生验证前不代表已支持 |
 
 当前 CSP 仍为 `null`。没有远程内容，但正式发布前仍需配置并验证收紧后的 CSP。
@@ -132,6 +146,7 @@ Python 提供系统解释器检测。版本目录、安装、验证和激活通�
 - Release 目录、资产选择、下载、摘要校验、解压、安装、更新和取消进入工具安装链路。
 - 操作任务、channel、event、重连查询、启动恢复和跨进程锁进入 `operations` 聚合。
 - 持久化格式迁移、备份恢复、卸载、缓存清理和修复命令进入完整工具管理能力。
+- 代理认证、系统代理、镜像和离线目录进入后续网络设置；当前代理只支持直连和手动 HTTP/SOCKS5H。
 - Python 复用 uv 托管运行时；Node.js 和 Git 作为独立插件接入。
 - Windows 和 Linux 在目标平台完成原生构建与运行验证。
 - TypeScript IPC 类型和运行时契约校验由契约生成流程维护。

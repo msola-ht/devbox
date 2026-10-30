@@ -25,7 +25,7 @@ main.tsx
             infrastructure
 ```
 
-当前业务链路提供环境查询、工具状态查询和显式刷新。
+当前业务链路提供环境查询、工具状态查询、显式刷新、代理设置和代理连接测试。
 
 ```text
 DashboardPage / ToolsPage
@@ -36,9 +36,16 @@ DashboardPage / ToolsPage
   → EnvironmentService / ToolchainService
   → uv 与 Python 检测插件
   → DevboxLayout / probe_version
+
+SettingsPage
+  → useSettings
+  → getSettings / updateSettings / testProxy
+  → get_settings / update_settings / test_proxy
+  → SettingsService
+  → config.json / network client
 ```
 
-工具链快照由 Rust 持有权威结果，前端保存查询缓存。环境与工具链模块通过 `src/app` 协调联合加载和刷新，页面只负责路由与展示组合。
+工具链快照和代理设置由 Rust 持有权威结果，前端保存查询快照和表单草稿。环境与工具链模块通过 `src/app` 协调联合加载和刷新，页面只负责路由与展示组合。
 
 ## 模块职责
 
@@ -201,7 +208,7 @@ uv 安装链路完整后，按能力复用顺序扩展：
 2. Node.js 验证归档安装、校验文件和双版本切换。
 3. Git 验证平台化检测、系统权限边界和安装策略。
 4. 操作历史、缓存和多工具查询形成独立业务模块。
-5. 设置、代理、镜像、离线缓存和 Shell 集成进入受控配置链路。
+5. 代理设置已建立直连、手动 HTTP/SOCKS5H、持久化和连接测试；继续增加代理认证、镜像、离线缓存和 Shell 集成。
 6. 操作记录和缓存规模达到结构化查询需求后，引入持久化迁移与 SQLite。
 7. 第三方插件在独立进程或受限 WebAssembly 沙箱中运行。
 

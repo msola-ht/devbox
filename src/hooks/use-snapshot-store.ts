@@ -19,6 +19,7 @@ export interface SnapshotQueryState<T extends VersionedSnapshot> {
 export interface SnapshotStore<T extends VersionedSnapshot> {
   subscribe: (listener: () => void) => () => void
   getState: () => SnapshotQueryState<T>
+  apply: (snapshot: T) => void
   ensureLoaded: () => Promise<void>
   refresh: () => Promise<void>
 }
@@ -152,6 +153,9 @@ export function createSnapshotStore<T extends VersionedSnapshot>({
     },
     getState() {
       return state
+    },
+    apply(snapshot) {
+      applySnapshot(snapshot)
     },
     ensureLoaded() {
       if (state.status === "idle" || state.status === "error") {

@@ -2,8 +2,8 @@ import { createHashRouter } from "react-router-dom"
 
 import { AppLayout } from "@/components/app-layout"
 import { DashboardPage } from "@/pages/dashboard"
-import { InDevelopmentPage } from "@/pages/in-development"
 import { NotFoundPage } from "@/pages/not-found"
+import { SettingsPage } from "@/pages/settings"
 import { ToolsPage } from "@/pages/tools"
 
 export const router = createHashRouter([
@@ -23,7 +23,7 @@ export const router = createHashRouter([
       },
       {
         path: "settings",
-        element: <InDevelopmentPage title="设置" />,
+        element: <SettingsPage />,
         handle: { crumb: "设置" },
       },
       {
