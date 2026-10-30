@@ -1,5 +1,14 @@
 use std::path::PathBuf;
 
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum ShellEnvironmentStatus {
+  Ready,
+  #[default]
+  DefaultShellUnavailable,
+  UnsupportedShell,
+  LoginPathUnavailable,
+}
+
 #[derive(Clone, Debug)]
 pub struct EnvironmentInfo {
   pub os: String,
@@ -11,9 +20,16 @@ pub struct EnvironmentInfo {
   pub gpu_name: Option<String>,
   pub gpu_core_count: Option<u32>,
   pub default_shell: Option<String>,
+  pub shell_environment_status: ShellEnvironmentStatus,
   pub login_shell_path: Vec<PathBuf>,
   pub home_dir: PathBuf,
   pub devbox_root: PathBuf,
   pub devbox_ready: bool,
   pub devbox_error: Option<String>,
+}
+
+#[derive(Clone, Debug)]
+pub struct EnvironmentSnapshot {
+  pub revision: u64,
+  pub info: EnvironmentInfo,
 }

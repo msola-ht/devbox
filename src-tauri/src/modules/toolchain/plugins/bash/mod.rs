@@ -1,13 +1,15 @@
 use std::path::{Path, PathBuf};
 
-use super::super::model::{TOOL_PLUGIN_CONTRACT_VERSION, ToolDescriptor};
+use super::super::model::{TOOL_PLUGIN_CONTRACT_VERSION, ToolDescriptor, ToolKind};
 use super::super::plugin::{ToolPlugin, ToolPluginContext};
+use super::super::plugin_support::{default_shell_candidate, normalized_path};
 
 static BASH_DESCRIPTOR: ToolDescriptor = ToolDescriptor {
   tool_id: "bash",
   display_name: "Bash",
   description: "GNU Bourne-Again Shell",
   contract_version: TOOL_PLUGIN_CONTRACT_VERSION,
+  kind: ToolKind::Shell,
 };
 
 pub struct BashPlugin;
@@ -28,29 +30,8 @@ impl ToolPlugin for BashPlugin {
     }
   }
 
-  fn known_directories(&self, environment: &ToolPluginContext<'_>) -> Vec<PathBuf> {
-    match environment.os {
-      "macos" => vec![
-        PathBuf::from("/opt/homebrew/bin"),
-        PathBuf::from("/usr/local/bin"),
-        PathBuf::from("/bin"),
-      ],
-      "linux" => vec![
-        PathBuf::from("/usr/local/bin"),
-        PathBuf::from("/usr/bin"),
-        PathBuf::from("/bin"),
-      ],
-      "windows" => {
-        let mut directories = std::env::var_os("ProgramFiles")
-          .map(|path| vec![PathBuf::from(path).join("Git/bin")])
-          .unwrap_or_default();
-        if let Some(local_app_data) = std::env::var_os("LOCALAPPDATA") {
-          directories.push(PathBuf::from(local_app_data).join("Programs/Git/bin"));
-        }
-        directories
-      }
-      _ => Vec::new(),
-    }
+  fn current_candidate_override(&self, context: &ToolPluginContext<'_>) -> Option<PathBuf> {
+    default_shell_candidate("bash", context.default_shell)
   }
 
   fn version_args(&self) -> &'static [&'static str] {
@@ -68,8 +49,7 @@ impl ToolPlugin for BashPlugin {
     let version = raw_version
       .chars()
       .take_while(|character| {
-        character.is_ascii_alphanumeric()
-          || matches!(character, '.' | '-' | '+')
+        character.is_ascii_alphanumeric() || matches!(character, '.' | '-' | '+')
       })
       .collect::<String>();
     version.contains('.').then_some(version)
@@ -90,8 +70,4 @@ impl ToolPlugin for BashPlugin {
       Some("PATH".to_string())
     }
   }
-}
-
-fn normalized_path(path: &Path) -> String {
-  path.to_string_lossy().replace('\\', "/").to_lowercase()
 }

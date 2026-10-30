@@ -1,13 +1,14 @@
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
-use super::super::model::{TOOL_PLUGIN_CONTRACT_VERSION, ToolDescriptor};
-use super::super::plugin::{ToolPlugin, ToolPluginContext};
+use super::super::model::{TOOL_PLUGIN_CONTRACT_VERSION, ToolDescriptor, ToolKind};
+use super::super::plugin::ToolPlugin;
 
 static UV_DESCRIPTOR: ToolDescriptor = ToolDescriptor {
   tool_id: "uv",
   display_name: "uv",
   description: "跨平台 Python 包与项目管理工具",
   contract_version: TOOL_PLUGIN_CONTRACT_VERSION,
+  kind: ToolKind::Tool,
 };
 
 pub struct UvPlugin;
@@ -25,23 +26,6 @@ impl ToolPlugin for UvPlugin {
     #[cfg(not(windows))]
     {
       &["uv"]
-    }
-  }
-
-  fn known_directories(&self, environment: &ToolPluginContext<'_>) -> Vec<PathBuf> {
-    match environment.os {
-      "macos" => vec![
-        PathBuf::from("/opt/homebrew/bin"),
-        PathBuf::from("/usr/local/bin"),
-        environment.home_dir.join(".local/bin"),
-      ],
-      "linux" => vec![
-        environment.home_dir.join(".local/bin"),
-        PathBuf::from("/usr/local/bin"),
-        PathBuf::from("/usr/bin"),
-      ],
-      "windows" => vec![environment.home_dir.join(".local").join("bin")],
-      _ => Vec::new(),
     }
   }
 

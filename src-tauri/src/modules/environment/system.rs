@@ -3,6 +3,7 @@ use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use crate::infrastructure::process::probe_version;
+use crate::modules::environment::ShellEnvironmentStatus;
 
 const PROBE_TIMEOUT: Duration = Duration::from_secs(2);
 const LOGIN_SHELL_TIMEOUT: Duration = Duration::from_secs(5);
@@ -18,6 +19,7 @@ pub struct SystemProfile {
   pub gpu_name: Option<String>,
   pub gpu_core_count: Option<u32>,
   pub default_shell: Option<String>,
+  pub shell_environment_status: ShellEnvironmentStatus,
   pub login_shell_path: Vec<PathBuf>,
 }
 
@@ -35,9 +37,9 @@ pub async fn detect_system_profile(home_dir: &Path) -> SystemProfile {
   let disk_total_bytes = disk.await.ok().flatten();
   let (gpu_name, gpu_core_count) = gpu.await.unwrap_or((None, None));
   let default_shell = default_shell.await.ok().flatten();
-  let login_shell_path = match default_shell.as_deref() {
+  let (login_shell_path, shell_environment_status) = match default_shell.as_deref() {
     Some(shell) => detect_login_shell_path(Path::new(shell)).await,
-    None => Vec::new(),
+    None => (Vec::new(), ShellEnvironmentStatus::DefaultShellUnavailable),
   };
 
   SystemProfile {
@@ -48,6 +50,7 @@ pub async fn detect_system_profile(home_dir: &Path) -> SystemProfile {
     gpu_name,
     gpu_core_count,
     default_shell,
+    shell_environment_status,
     login_shell_path,
   }
 }
@@ -62,48 +65,43 @@ async fn probe(program: &str, args: &[&str]) -> Option<String> {
   }
 }
 
-async fn detect_login_shell_path(shell: &Path) -> Vec<PathBuf> {
+async fn detect_login_shell_path(shell: &Path) -> (Vec<PathBuf>, ShellEnvironmentStatus) {
   let Some(shell_name) = shell.file_name().and_then(OsStr::to_str) else {
-    return Vec::new();
+    return (Vec::new(), ShellEnvironmentStatus::DefaultShellUnavailable);
   };
-  if !shell.is_absolute()
-    || !matches!(
-      shell_name.trim_end_matches(".exe"),
-      "bash" | "zsh"
-    )
-  {
-    return Vec::new();
+  if !shell.is_absolute() || !matches!(shell_name.trim_end_matches(".exe"), "bash" | "zsh") {
+    return (Vec::new(), ShellEnvironmentStatus::UnsupportedShell);
   }
 
-  let script = format!(
-    "printf '\\n{LOGIN_PATH_BEGIN}%s{LOGIN_PATH_END}\\n' \"$PATH\""
-  );
-  let output = match probe_version(
-    shell,
-    &["-l", "-c", script.as_str()],
-    LOGIN_SHELL_TIMEOUT,
-  )
-  .await
+  let script = format!("printf '\\n{LOGIN_PATH_BEGIN}%s{LOGIN_PATH_END}\\n' \"$PATH\"");
+  let output = match probe_version(shell, &["-l", "-c", script.as_str()], LOGIN_SHELL_TIMEOUT).await
   {
     Ok(output) => output,
     Err(_) => {
       log::warn!("无法读取默认 Shell 登录环境 {}", shell.display());
-      return Vec::new();
+      return (Vec::new(), ShellEnvironmentStatus::LoginPathUnavailable);
     }
   };
 
   let Some(value_start) = output.find(LOGIN_PATH_BEGIN) else {
-    return Vec::new();
+    return (Vec::new(), ShellEnvironmentStatus::LoginPathUnavailable);
   };
   let value_start = value_start + LOGIN_PATH_BEGIN.len();
   let Some(value_end) = output[value_start..].find(LOGIN_PATH_END) else {
-    return Vec::new();
+    return (Vec::new(), ShellEnvironmentStatus::LoginPathUnavailable);
   };
   let value = &output[value_start..value_start + value_end];
 
-  std::env::split_paths(OsStr::new(value))
+  let login_shell_path = std::env::split_paths(OsStr::new(value))
     .filter(|path| path.is_absolute())
-    .collect()
+    .collect::<Vec<_>>();
+  let status = if login_shell_path.is_empty() {
+    ShellEnvironmentStatus::LoginPathUnavailable
+  } else {
+    ShellEnvironmentStatus::Ready
+  };
+
+  (login_shell_path, status)
 }
 
 #[cfg(target_os = "macos")]
@@ -113,11 +111,7 @@ async fn detect_default_shell(home_dir: std::path::PathBuf) -> Option<String> {
     return None;
   }
 
-  let output = probe(
-    "/usr/bin/dscl",
-    &[".", "-read", home.as_str(), "UserShell"],
-  )
-  .await?;
+  let output = probe("/usr/bin/dscl", &[".", "-read", home.as_str(), "UserShell"]).await?;
   output.lines().find_map(|line| {
     let shell = line.strip_prefix("UserShell:")?.trim();
     (shell.starts_with('/') && shell.len() > 1).then(|| shell.to_string())

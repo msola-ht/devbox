@@ -1,13 +1,15 @@
 use std::path::{Path, PathBuf};
 
-use super::super::model::{TOOL_PLUGIN_CONTRACT_VERSION, ToolDescriptor};
+use super::super::model::{TOOL_PLUGIN_CONTRACT_VERSION, ToolDescriptor, ToolKind};
 use super::super::plugin::{ToolPlugin, ToolPluginContext};
+use super::super::plugin_support::{default_shell_candidate, normalized_path};
 
 static ZSH_DESCRIPTOR: ToolDescriptor = ToolDescriptor {
   tool_id: "zsh",
   display_name: "Zsh",
   description: "Z Shell 交互式命令行",
   contract_version: TOOL_PLUGIN_CONTRACT_VERSION,
+  kind: ToolKind::Shell,
 };
 
 pub struct ZshPlugin;
@@ -28,20 +30,8 @@ impl ToolPlugin for ZshPlugin {
     }
   }
 
-  fn known_directories(&self, environment: &ToolPluginContext<'_>) -> Vec<PathBuf> {
-    match environment.os {
-      "macos" => vec![
-        PathBuf::from("/opt/homebrew/bin"),
-        PathBuf::from("/usr/local/bin"),
-        PathBuf::from("/bin"),
-      ],
-      "linux" => vec![
-        PathBuf::from("/usr/local/bin"),
-        PathBuf::from("/usr/bin"),
-        PathBuf::from("/bin"),
-      ],
-      _ => Vec::new(),
-    }
+  fn current_candidate_override(&self, context: &ToolPluginContext<'_>) -> Option<PathBuf> {
+    default_shell_candidate("zsh", context.default_shell)
   }
 
   fn version_args(&self) -> &'static [&'static str] {
@@ -60,8 +50,7 @@ impl ToolPlugin for ZshPlugin {
       if !characters.next()?.is_ascii_digit()
         || !version.contains('.')
         || !characters.all(|character| {
-          character.is_ascii_alphanumeric()
-            || matches!(character, '.' | '-' | '+')
+          character.is_ascii_alphanumeric() || matches!(character, '.' | '-' | '+')
         })
       {
         return None;
@@ -83,8 +72,4 @@ impl ToolPlugin for ZshPlugin {
       Some("PATH".to_string())
     }
   }
-}
-
-fn normalized_path(path: &Path) -> String {
-  path.to_string_lossy().replace('\\', "/").to_lowercase()
 }

@@ -9,7 +9,8 @@ use serde::Deserialize;
 
 use super::error::ToolchainError;
 use super::model::{
-  InstallationSource, InstallationSummary, ToolDescriptor, ToolSummary, ToolchainSnapshot,
+  ActiveInstallationState, InstallationSource, InstallationSummary, ToolDescriptor, ToolSummary,
+  ToolchainSnapshot,
 };
 use super::plugin::{ToolPlugin, ToolPluginContext};
 use super::plugins::PluginRegistry;
@@ -29,6 +30,7 @@ pub struct ToolchainService {
 #[derive(Clone)]
 struct CachedTools {
   revision: u64,
+  environment_revision: u64,
   tools: Vec<ToolSummary>,
 }
 
@@ -45,32 +47,35 @@ impl ToolchainService {
   pub async fn list_tools(
     &self,
     environment: &EnvironmentInfo,
+    environment_revision: u64,
   ) -> Result<ToolchainSnapshot, ToolchainError> {
-    if let Some(cached) = self.cached_tools() {
+    if let Some(cached) = self.cached_tools(environment_revision) {
       return Ok(ToolchainSnapshot {
         revision: cached.revision,
+        environment_revision: cached.environment_revision,
         tools: cached.tools,
       });
     }
 
-    self.refresh_tools(environment).await
+    self.refresh_tools(environment, environment_revision).await
   }
 
   pub async fn refresh_tools(
     &self,
     environment: &EnvironmentInfo,
+    environment_revision: u64,
   ) -> Result<ToolchainSnapshot, ToolchainError> {
     let revision = self.next_revision();
     let tools = self.detect_tools(environment).await?;
-    self.cache_tools(revision, tools.clone());
+    self.cache_tools(revision, environment_revision, tools.clone());
 
     let summary = tools
       .iter()
       .map(|tool| {
         format!(
-          "{} ({} system, {} managed)",
+          "{} (effective={}, {} managed)",
           tool.tool_id,
-          tool.system_installations.len(),
+          tool.effective_installation.is_some(),
           tool.managed_installations.len()
         )
       })
@@ -78,26 +83,39 @@ impl ToolchainService {
       .join(", ");
     log::info!("工具检测完成 revision={revision}: {summary}");
 
-    Ok(ToolchainSnapshot { revision, tools })
+    Ok(ToolchainSnapshot {
+      revision,
+      environment_revision,
+      tools,
+    })
   }
 
   fn next_revision(&self) -> u64 {
     self.revision.fetch_add(1, Ordering::SeqCst) + 1
   }
 
-  fn cache_tools(&self, revision: u64, tools: Vec<ToolSummary>) {
+  fn cache_tools(&self, revision: u64, environment_revision: u64, tools: Vec<ToolSummary>) {
     if let Ok(mut cache) = self.cache.write() {
       let is_newer = cache
         .as_ref()
         .is_none_or(|cached| revision > cached.revision);
       if is_newer {
-        *cache = Some(CachedTools { revision, tools });
+        *cache = Some(CachedTools {
+          revision,
+          environment_revision,
+          tools,
+        });
       }
     }
   }
 
-  fn cached_tools(&self) -> Option<CachedTools> {
-    self.cache.read().ok().and_then(|cache| cache.clone())
+  fn cached_tools(&self, environment_revision: u64) -> Option<CachedTools> {
+    self
+      .cache
+      .read()
+      .ok()
+      .and_then(|cache| cache.clone())
+      .filter(|cached| cached.environment_revision == environment_revision)
   }
 
   async fn detect_tools(
@@ -106,50 +124,42 @@ impl ToolchainService {
   ) -> Result<Vec<ToolSummary>, ToolchainError> {
     let mut tools = Vec::new();
     let context = ToolPluginContext {
-      os: &environment.os,
-      home_dir: &environment.home_dir,
-      login_shell_path: &environment.login_shell_path,
       default_shell: environment.default_shell.as_deref(),
     };
 
     for plugin in self.registry.plugins() {
       let mut summary = ToolSummary::empty(plugin.descriptor());
-      summary.system_installations = self.detect_system_installations(plugin, &context).await?;
-      let (managed_installations, active_installation_id) =
-        self.scan_managed_state(plugin).await?;
-      summary.managed_installations = managed_installations;
-      summary.active_installation_id = active_installation_id.filter(|active| {
-        summary
-          .managed_installations
-          .iter()
-          .any(|installation| installation.installation_id == *active && installation.healthy)
-      });
-      summary.current_installation_id = summary
-        .system_installations
-        .first()
-        .map(|installation| installation.installation_id.clone())
-        .or_else(|| summary.active_installation_id.clone());
+      summary.set_effective_installation(
+        self
+          .detect_system_installation(plugin, &context, &environment.login_shell_path)
+          .await?,
+      );
+      let (managed_installations, active_selection) = self.scan_managed_state(plugin).await?;
+      summary.set_managed_state(managed_installations, active_selection);
       tools.push(summary);
     }
 
     Ok(tools)
   }
 
-  async fn detect_system_installations(
+  async fn detect_system_installation(
     &self,
     plugin: &dyn ToolPlugin,
-    environment: &ToolPluginContext<'_>,
-  ) -> Result<Vec<InstallationSummary>, ToolchainError> {
-    let Some((canonical, display_path)) = self.current_system_candidate(plugin, environment).await?
+    context: &ToolPluginContext<'_>,
+    login_shell_path: &[PathBuf],
+  ) -> Result<Option<InstallationSummary>, ToolchainError> {
+    let Some((canonical, display_path)) = self
+      .current_system_candidate(plugin, context, login_shell_path)
+      .await?
     else {
-      return Ok(Vec::new());
+      return Ok(None);
     };
     let source_hint = plugin.source_hint(&display_path);
     let probe = probe_version_with_path(
       &display_path,
       plugin.version_args(),
       VERSION_PROBE_TIMEOUT,
-      Some(environment.login_shell_path),
+      Some(login_shell_path),
     )
     .await;
 
@@ -185,33 +195,23 @@ impl ToolchainService {
       }
     };
 
-    Ok(vec![installation])
+    Ok(Some(installation))
   }
 
   async fn current_system_candidate(
     &self,
     plugin: &dyn ToolPlugin,
-    environment: &ToolPluginContext<'_>,
+    context: &ToolPluginContext<'_>,
+    login_shell_path: &[PathBuf],
   ) -> Result<Option<(String, PathBuf)>, ToolchainError> {
-    let tool_id = plugin.descriptor().tool_id;
-    if matches!(tool_id, "bash" | "zsh") {
-      let Some(shell) = environment.default_shell.map(PathBuf::from) else {
-        return Ok(None);
-      };
-      if shell.file_stem().and_then(|name| name.to_str()) != Some(tool_id) || !shell.is_file() {
-        return Ok(None);
-      }
-      return Ok(Some((canonical_path(&shell), shell)));
+    if let Some(candidate) = plugin.current_candidate_override(context) {
+      return Ok(is_executable_file(&candidate).then(|| (canonical_path(&candidate), candidate)));
     }
 
-    let mut directories = environment.login_shell_path.to_vec();
-    if directories.is_empty() {
-      directories.extend(plugin.preferred_directories(environment));
-      if let Some(path) = std::env::var_os("PATH") {
-        directories.extend(std::env::split_paths(&path));
-      }
-      directories.extend(plugin.known_directories(environment));
+    if login_shell_path.is_empty() {
+      return Ok(None);
     }
+    let directories = login_shell_path.to_vec();
     let executables = plugin.executable_names().to_vec();
 
     tokio::task::spawn_blocking(move || {
@@ -222,7 +222,7 @@ impl ToolchainService {
 
         for executable in &executables {
           let candidate = directory.join(executable);
-          if !candidate.is_file() {
+          if !is_executable_file(&candidate) {
             continue;
           }
 
@@ -242,7 +242,7 @@ impl ToolchainService {
   async fn scan_managed_state(
     &self,
     plugin: &dyn ToolPlugin,
-  ) -> Result<(Vec<InstallationSummary>, Option<String>), ToolchainError> {
+  ) -> Result<(Vec<InstallationSummary>, ActiveInstallationState), ToolchainError> {
     let layout = self.layout.clone();
     let descriptor = plugin.descriptor().clone();
 
@@ -256,6 +256,25 @@ impl ToolchainService {
       operation: "托管安装扫描",
       message: error.to_string(),
     })?
+  }
+}
+
+fn is_executable_file(path: &Path) -> bool {
+  let Ok(metadata) = fs::metadata(path) else {
+    return false;
+  };
+  if !metadata.is_file() {
+    return false;
+  }
+
+  #[cfg(unix)]
+  {
+    use std::os::unix::fs::PermissionsExt;
+    metadata.permissions().mode() & 0o111 != 0
+  }
+  #[cfg(not(unix))]
+  {
+    true
   }
 }
 
@@ -286,18 +305,16 @@ fn scan_managed_installations(
     return Err(ToolchainError::UnsafeManagedToolPath { path: tool_root });
   }
 
-  let entries = fs::read_dir(&tool_root).map_err(|source| {
-    ToolchainError::ReadManagedToolEntries {
+  let entries =
+    fs::read_dir(&tool_root).map_err(|source| ToolchainError::ReadManagedToolEntries {
       path: tool_root.clone(),
       source,
-    }
-  })?;
-  let canonical_tool_root = fs::canonicalize(&tool_root).map_err(|source| {
-    ToolchainError::CanonicalizeManagedToolRoot {
+    })?;
+  let canonical_tool_root =
+    fs::canonicalize(&tool_root).map_err(|source| ToolchainError::CanonicalizeManagedToolRoot {
       path: tool_root.clone(),
       source,
-    }
-  })?;
+    })?;
 
   let mut installations = Vec::new();
   for entry in entries {
@@ -320,14 +337,16 @@ fn scan_managed_installations(
   Ok(installations)
 }
 
-fn read_active_installation(layout: &DevboxLayout, tool_id: &str) -> Option<String> {
+fn read_active_installation(layout: &DevboxLayout, tool_id: &str) -> ActiveInstallationState {
   let active_path = layout.active_installation_pointer(tool_id);
   let contents = match fs::read_to_string(&active_path) {
     Ok(contents) => contents,
-    Err(error) if error.kind() == ErrorKind::NotFound => return None,
+    Err(error) if error.kind() == ErrorKind::NotFound => {
+      return ActiveInstallationState::Absent;
+    }
     Err(error) => {
       log::warn!("无法读取 active 指针 {}: {error}", active_path.display());
-      return None;
+      return ActiveInstallationState::Invalid("ACTIVE_POINTER_UNREADABLE");
     }
   };
 
@@ -337,15 +356,15 @@ fn read_active_installation(layout: &DevboxLayout, tool_id: &str) -> Option<Stri
         && pointer.tool_id == tool_id
         && !pointer.installation_id.trim().is_empty() =>
     {
-      Some(pointer.installation_id)
+      ActiveInstallationState::Selected(pointer.installation_id)
     }
     Err(error) => {
       log::warn!("active 指针格式无效 {}: {error}", active_path.display());
-      None
+      ActiveInstallationState::Invalid("ACTIVE_POINTER_CORRUPT")
     }
     Ok(_) => {
       log::warn!("active 指针字段不匹配 {}", active_path.display());
-      None
+      ActiveInstallationState::Invalid("ACTIVE_POINTER_INVALID")
     }
   }
 }

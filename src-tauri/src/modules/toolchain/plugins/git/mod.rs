@@ -1,13 +1,15 @@
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
-use super::super::model::{TOOL_PLUGIN_CONTRACT_VERSION, ToolDescriptor};
-use super::super::plugin::{ToolPlugin, ToolPluginContext};
+use super::super::model::{TOOL_PLUGIN_CONTRACT_VERSION, ToolDescriptor, ToolKind};
+use super::super::plugin::ToolPlugin;
+use super::super::plugin_support::{normalized_path, parse_version_token};
 
 static GIT_DESCRIPTOR: ToolDescriptor = ToolDescriptor {
   tool_id: "git",
   display_name: "Git",
   description: "分布式版本控制工具",
   contract_version: TOOL_PLUGIN_CONTRACT_VERSION,
+  kind: ToolKind::Tool,
 };
 
 pub struct GitPlugin;
@@ -26,34 +28,6 @@ impl ToolPlugin for GitPlugin {
     {
       &["git"]
     }
-  }
-
-  fn known_directories(&self, environment: &ToolPluginContext<'_>) -> Vec<PathBuf> {
-    let mut directories = match environment.os {
-      "macos" => vec![
-        PathBuf::from("/opt/homebrew/bin"),
-        PathBuf::from("/usr/local/bin"),
-        PathBuf::from("/usr/bin"),
-      ],
-      "linux" => vec![
-        PathBuf::from("/usr/local/bin"),
-        PathBuf::from("/usr/bin"),
-        PathBuf::from("/bin"),
-      ],
-      "windows" => {
-        let mut directories = std::env::var_os("ProgramFiles")
-          .map(|path| vec![PathBuf::from(path).join("Git/cmd")])
-          .unwrap_or_default();
-        if let Some(local_app_data) = std::env::var_os("LOCALAPPDATA") {
-          directories.push(PathBuf::from(local_app_data).join("Programs/Git/cmd"));
-        }
-        directories
-      }
-      _ => Vec::new(),
-    };
-
-    directories.push(environment.home_dir.join("scoop/shims"));
-    directories
   }
 
   fn version_args(&self) -> &'static [&'static str] {
@@ -88,23 +62,4 @@ impl ToolPlugin for GitPlugin {
       Some("PATH".to_string())
     }
   }
-}
-
-fn parse_version_token(token: &str) -> Option<String> {
-  let version = token.strip_prefix('v').unwrap_or(token);
-  let mut characters = version.chars();
-  if !characters.next()?.is_ascii_digit()
-    || !version.contains('.')
-    || !characters.all(|character| {
-      character.is_ascii_alphanumeric()
-        || matches!(character, '.' | '-' | '+')
-    })
-  {
-    return None;
-  }
-  Some(version.to_string())
-}
-
-fn normalized_path(path: &Path) -> String {
-  path.to_string_lossy().replace('\\', "/").to_lowercase()
 }

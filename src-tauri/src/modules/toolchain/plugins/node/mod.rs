@@ -1,13 +1,15 @@
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
-use super::super::model::{TOOL_PLUGIN_CONTRACT_VERSION, ToolDescriptor};
-use super::super::plugin::{ToolPlugin, ToolPluginContext};
+use super::super::model::{TOOL_PLUGIN_CONTRACT_VERSION, ToolDescriptor, ToolKind};
+use super::super::plugin::ToolPlugin;
+use super::super::plugin_support::{normalized_path, parse_version_line};
 
 static NODE_DESCRIPTOR: ToolDescriptor = ToolDescriptor {
   tool_id: "node",
   display_name: "Node.js",
   description: "JavaScript 运行时与包管理基础环境",
   contract_version: TOOL_PLUGIN_CONTRACT_VERSION,
+  kind: ToolKind::Tool,
 };
 
 pub struct NodePlugin;
@@ -26,27 +28,6 @@ impl ToolPlugin for NodePlugin {
     {
       &["node"]
     }
-  }
-
-  fn known_directories(&self, environment: &ToolPluginContext<'_>) -> Vec<PathBuf> {
-    let mut directories = match environment.os {
-      "macos" => vec![
-        PathBuf::from("/opt/homebrew/bin"),
-        PathBuf::from("/usr/local/bin"),
-      ],
-      "linux" => vec![
-        PathBuf::from("/usr/local/bin"),
-        PathBuf::from("/usr/bin"),
-        PathBuf::from("/bin"),
-      ],
-      "windows" => std::env::var_os("ProgramFiles")
-        .map(|path| vec![PathBuf::from(path).join("nodejs")])
-        .unwrap_or_default(),
-      _ => Vec::new(),
-    };
-
-    directories.extend(node_version_manager_directories(environment));
-    directories
   }
 
   fn version_args(&self) -> &'static [&'static str] {
@@ -71,55 +52,6 @@ impl ToolPlugin for NodePlugin {
   }
 }
 
-pub(super) fn node_version_manager_directories(
-  environment: &ToolPluginContext<'_>,
-) -> Vec<PathBuf> {
-  let home = &environment.home_dir;
-  let directories = vec![
-    home.join(".volta/bin"),
-    home.join(".nodenv/shims"),
-    home.join(".asdf/shims"),
-    home.join(".local/share/fnm/aliases/default/bin"),
-    home.join(".fnm/aliases/default/bin"),
-    home.join(".nvm/current/bin"),
-  ];
-
-  #[cfg(windows)]
-  let directories = {
-    let mut directories = directories;
-    if let Some(local_app_data) = std::env::var_os("LOCALAPPDATA") {
-      let local_app_data = PathBuf::from(local_app_data);
-      directories.push(local_app_data.join("fnm/aliases/default/bin"));
-      directories.push(local_app_data.join("Volta/bin"));
-    }
-    directories
-  };
-
-  directories
-}
-
-fn parse_version_line(output: &str) -> Option<String> {
-  output.lines().find_map(|line| {
-    line.split_whitespace()
-      .find_map(parse_version_token)
-  })
-}
-
-fn parse_version_token(token: &str) -> Option<String> {
-  let version = token.strip_prefix('v').unwrap_or(token);
-  let mut characters = version.chars();
-  if !characters.next()?.is_ascii_digit()
-    || !version.contains('.')
-    || !characters.all(|character| {
-      character.is_ascii_alphanumeric()
-        || matches!(character, '.' | '-' | '+')
-    })
-  {
-    return None;
-  }
-  Some(version.to_string())
-}
-
 fn version_manager_source(path: &Path) -> Option<String> {
   let path = normalized_path(path);
   if path.contains("/fnm/") {
@@ -135,8 +67,4 @@ fn version_manager_source(path: &Path) -> Option<String> {
   } else {
     None
   }
-}
-
-fn normalized_path(path: &Path) -> String {
-  path.to_string_lossy().replace('\\', "/").to_lowercase()
 }

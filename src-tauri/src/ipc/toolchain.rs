@@ -4,7 +4,7 @@ use tauri::State;
 use super::error::IpcError;
 use super::now_rfc3339;
 use crate::modules::toolchain::{
-  InstallationSource, InstallationSummary, ToolSummary, ToolchainError, ToolchainSnapshot,
+  InstallationSource, InstallationSummary, ToolKind, ToolSummary, ToolchainError, ToolchainSnapshot,
 };
 use crate::state::AppState;
 
@@ -13,6 +13,7 @@ use crate::state::AppState;
 pub struct ToolListSnapshot {
   boot_id: String,
   revision: String,
+  environment_revision: String,
   generated_at: String,
   tools: Vec<ToolSummaryDto>,
 }
@@ -24,10 +25,19 @@ struct ToolSummaryDto {
   display_name: String,
   description: String,
   plugin_contract_version: String,
-  system_installations: Vec<InstallationSummaryDto>,
+  kind: ToolKindDto,
+  is_default_shell: bool,
+  effective_installation: Option<InstallationSummaryDto>,
   managed_installations: Vec<InstallationSummaryDto>,
   active_installation_id: Option<String>,
-  current_installation_id: Option<String>,
+  active_installation_error_code: Option<String>,
+}
+
+#[derive(Clone, Copy, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+enum ToolKindDto {
+  Tool,
+  Shell,
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -51,10 +61,10 @@ enum InstallationSourceDto {
 
 #[tauri::command]
 pub async fn list_tools(state: State<'_, AppState>) -> Result<ToolListSnapshot, IpcError> {
-  let environment = state.environment.info().clone();
+  let environment = state.environment.snapshot();
   let snapshot = state
     .toolchain
-    .list_tools(&environment)
+    .list_tools(&environment.info, environment.revision)
     .await
     .map_err(map_toolchain_error)?;
   Ok(build_snapshot(&state, &snapshot))
@@ -62,10 +72,10 @@ pub async fn list_tools(state: State<'_, AppState>) -> Result<ToolListSnapshot, 
 
 #[tauri::command]
 pub async fn refresh_tools(state: State<'_, AppState>) -> Result<ToolListSnapshot, IpcError> {
-  let environment = state.environment.info().clone();
+  let environment = state.environment.snapshot();
   let snapshot = state
     .toolchain
-    .refresh_tools(&environment)
+    .refresh_tools(&environment.info, environment.revision)
     .await
     .map_err(map_toolchain_error)?;
   Ok(build_snapshot(&state, &snapshot))
@@ -75,6 +85,7 @@ fn build_snapshot(state: &AppState, snapshot: &ToolchainSnapshot) -> ToolListSna
   ToolListSnapshot {
     boot_id: state.boot_id.clone(),
     revision: snapshot.revision.to_string(),
+    environment_revision: snapshot.environment_revision.to_string(),
     generated_at: now_rfc3339(),
     tools: snapshot.tools.iter().map(ToolSummaryDto::from).collect(),
   }
@@ -87,18 +98,22 @@ impl From<&ToolSummary> for ToolSummaryDto {
       display_name: tool.display_name.clone(),
       description: tool.description.clone(),
       plugin_contract_version: tool.plugin_contract_version.clone(),
-      system_installations: tool
-        .system_installations
-        .iter()
-        .map(InstallationSummaryDto::from)
-        .collect(),
+      kind: match tool.kind {
+        ToolKind::Tool => ToolKindDto::Tool,
+        ToolKind::Shell => ToolKindDto::Shell,
+      },
+      is_default_shell: tool.is_default_shell,
+      effective_installation: tool
+        .effective_installation
+        .as_ref()
+        .map(InstallationSummaryDto::from),
       managed_installations: tool
         .managed_installations
         .iter()
         .map(InstallationSummaryDto::from)
         .collect(),
       active_installation_id: tool.active_installation_id.clone(),
-      current_installation_id: tool.current_installation_id.clone(),
+      active_installation_error_code: tool.active_installation_error_code.clone(),
     }
   }
 }
@@ -135,9 +150,7 @@ fn map_toolchain_error(error: ToolchainError) -> IpcError {
       "TOOLS_DIRECTORY_UNAVAILABLE",
       "无法读取 DevBox 托管工具目录",
     ),
-    ToolchainError::BlockingTaskFailed { .. } => {
-      ("TOOLS_SCAN_FAILED", "无法完成本机工具检测")
-    }
+    ToolchainError::BlockingTaskFailed { .. } => ("TOOLS_SCAN_FAILED", "无法完成本机工具检测"),
   };
   IpcError::new(code, message)
 }

@@ -1,7 +1,7 @@
 import { useCallback } from "react"
 
 import { useEnvironment } from "@/features/environment"
-import { useToolchain } from "@/features/toolchain"
+import { selectVisibleTools, useToolchain } from "@/features/toolchain"
 
 export function useToolchainWorkspace() {
   const environment = useEnvironment()
@@ -11,14 +11,25 @@ export function useToolchainWorkspace() {
   const loading =
     environment.state.status === "loading" ||
     toolchain.state.status === "loading"
+  const hasCurrentToolSnapshot =
+    environment.state.data !== null &&
+    toolchain.state.data !== null &&
+    environment.state.data.revision === toolchain.state.data.environmentRevision
+  const tools =
+    hasCurrentToolSnapshot && toolchain.state.data
+      ? selectVisibleTools(toolchain.state.data.tools)
+      : []
 
   const refreshAll = useCallback(async () => {
-    await Promise.all([refreshEnvironment(), refreshToolchain()])
+    await refreshEnvironment()
+    await refreshToolchain()
   }, [refreshEnvironment, refreshToolchain])
 
   return {
     environment,
     toolchain,
+    tools,
+    hasCurrentToolSnapshot,
     loading,
     refreshAll,
   }

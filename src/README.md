@@ -31,7 +31,7 @@ main.tsx
 | [page.tsx](components/page.tsx) | 页面统一纵向容器、宽度和间距 |
 | [app-sidebar.tsx](components/app-sidebar.tsx) | DevBox 品牌、工作区导航和本地设备状态占位 |
 | [app-navigation.tsx](components/app-navigation.tsx) | 概览、工具、设置的真实 `NavLink` 导航 |
-| [app/use-toolchain-workspace.ts](app/use-toolchain-workspace.ts) | 组合环境与工具链模块，统一联合加载状态和刷新操作 |
+| [app/use-toolchain-workspace.ts](app/use-toolchain-workspace.ts) | 组合环境与工具链模块，统一加载状态、可见工具集合和顺序刷新 |
 | [query-state-card.tsx](components/query-state-card.tsx) | 业务无关的查询加载、失败和旧数据提示 |
 | [refresh-button.tsx](components/refresh-button.tsx) | 业务无关的加载态刷新按钮 |
 
@@ -55,10 +55,11 @@ main.tsx
 | 文件 | 职责 |
 | --- | --- |
 | `contracts.ts` | `EnvironmentSnapshot`，与 Rust DTO 字段一一对应 |
-| `api.ts` | 调用 `get_environment` 的模块适配 |
+| `api.ts` | 调用 `get_environment` 和 `refresh_environment` 的模块适配 |
 | `hooks/use-environment.ts` | 创建模块级快照 store |
 | `model.ts` | 系统信息的纯展示转换与容量格式化 |
 | `components/environment-summary.tsx` | 展示 OS 版本、架构、内存、主目录所在卷容量、GPU 和账户默认 Shell |
+| `components/shell-environment-notice.tsx` | 展示默认 Shell 或登录 PATH 不可用状态 |
 | `index.ts` | 模块公开出口 |
 
 ### `features/toolchain`
@@ -68,12 +69,12 @@ main.tsx
 | `contracts.ts` | `ToolListSnapshot`、`ToolSummary` 和 `InstallationSummary` |
 | `api.ts` | 初次查询使用 `list_tools`，显式刷新使用 `refresh_tools` |
 | `hooks/use-toolchain.ts` | 创建模块级快照 store |
-| `model.ts` | 派生工具总体状态、active 安装判断和安装项展示键 |
-| `components/tool-summary-card.tsx` | 只展示当前安装，以及插件返回的说明、健康状态和 active 标记 |
+| `model.ts` | 选择当前 Shell 对应卡片，派生当前生效版本、active 状态和安装项展示键 |
+| `components/tool-summary-card.tsx` | 只展示 `effectiveInstallation`，以及插件返回的说明、健康状态和 active 标记 |
 | `components/toolchain-empty-state.tsx` | 展示成功返回但没有注册工具时的空状态 |
 | `index.ts` | 模块公开出口 |
 
-工具名称、说明和契约版本来自 Rust 插件 DTO；前端没有针对具体工具的检测分支。每张工具卡只展示 `currentInstallationId` 指向的当前安装，Shell 卡片再按账户默认 Shell 过滤。Python 虚拟环境通过安装项的来源提示区分。新增工具检测只需在 Rust 注册表接入插件，通用工具列表自动展示。
+工具名称、说明、类型、是否默认 Shell 和契约版本来自 Rust 插件 DTO；前端没有针对具体工具或 Shell ID 的检测分支。每张工具卡只展示默认 Shell 登录 PATH 中当前生效的安装，Shell 卡片由后端 `isDefaultShell` 标记选择。托管库存和 active 指针单独建模，不把已激活误当成已进入登录 PATH。新增工具检测只需在 Rust 注册表接入插件，通用工具列表自动展示。
 
 ### `features/settings`
 
@@ -97,7 +98,7 @@ main.tsx
 - [use-snapshot-store.ts](hooks/use-snapshot-store.ts) 管理 `idle`、`loading`、`ready`、`error`；同一 store 的普通并发加载合并为一次请求，查询进行中的显式刷新会在当前请求完成后排队执行。
 - 快照记录 `bootId` 和 `revision`。`bootId` 改变时重置 revision；较旧 revision 不覆盖已应用的新快照。
 - 刷新时保留已有数据；刷新失败后状态为 `error` 且旧数据仍可展示，页面同时显示错误提示。
-- 初次进入使用查询命令；用户点击刷新时才调用重检测命令。设置保存成功后直接应用 Rust 返回的新快照。
+- 初次进入使用查询命令；用户点击刷新时先重新检测环境，再使用新的环境 revision 重新检测工具链。设置保存成功后直接应用 Rust 返回的新快照。
 - event、channel、任务订阅和持久化业务缓存归后续操作链路。
 
 ## 基础组件与遗留文件

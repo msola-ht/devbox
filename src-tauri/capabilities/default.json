@@ -8,6 +8,7 @@
   "permissions": [
     "core:default",
     "allow-get-environment",
+    "allow-refresh-environment",
     "allow-get-settings",
     "allow-update-settings",
     "allow-test-proxy",

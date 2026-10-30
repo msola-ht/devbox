@@ -1,13 +1,14 @@
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
-use super::super::model::{TOOL_PLUGIN_CONTRACT_VERSION, ToolDescriptor};
-use super::super::plugin::{ToolPlugin, ToolPluginContext};
+use super::super::model::{TOOL_PLUGIN_CONTRACT_VERSION, ToolDescriptor, ToolKind};
+use super::super::plugin::ToolPlugin;
 
 static PYTHON_DESCRIPTOR: ToolDescriptor = ToolDescriptor {
   tool_id: "python",
   display_name: "Python",
   description: "Python 解释器与运行时",
   contract_version: TOOL_PLUGIN_CONTRACT_VERSION,
+  kind: ToolKind::Tool,
 };
 
 pub struct PythonPlugin;
@@ -25,51 +26,6 @@ impl ToolPlugin for PythonPlugin {
     #[cfg(not(windows))]
     {
       &["python3", "python"]
-    }
-  }
-
-  fn preferred_directories(&self, _environment: &ToolPluginContext<'_>) -> Vec<PathBuf> {
-    let mut directories = Vec::new();
-
-    for variable in ["VIRTUAL_ENV", "CONDA_PREFIX"] {
-      let Some(root) = std::env::var_os(variable).map(PathBuf::from) else {
-        continue;
-      };
-      if !root.is_absolute() {
-        continue;
-      }
-
-      #[cfg(windows)]
-      {
-        directories.push(root.clone());
-        directories.push(root.join("Scripts"));
-      }
-      #[cfg(not(windows))]
-      directories.push(root.join("bin"));
-    }
-
-    directories
-  }
-
-  fn known_directories(&self, environment: &ToolPluginContext<'_>) -> Vec<PathBuf> {
-    match environment.os {
-      "macos" => vec![
-        PathBuf::from("/opt/homebrew/bin"),
-        PathBuf::from("/usr/local/bin"),
-        PathBuf::from("/Library/Frameworks/Python.framework/Versions/Current/bin"),
-        environment.home_dir.join(".local/bin"),
-        environment.home_dir.join(".pyenv/shims"),
-      ],
-      "linux" => vec![
-        environment.home_dir.join(".local/bin"),
-        environment.home_dir.join(".pyenv/shims"),
-        PathBuf::from("/home/linuxbrew/.linuxbrew/bin"),
-        PathBuf::from("/usr/local/bin"),
-        PathBuf::from("/usr/bin"),
-        PathBuf::from("/bin"),
-      ],
-      "windows" => vec![environment.home_dir.join(".local").join("bin")],
-      _ => Vec::new(),
     }
   }
 
@@ -115,9 +71,7 @@ impl ToolPlugin for PythonPlugin {
       Some("Homebrew".to_string())
     } else if path.starts_with("/usr/bin/") || path.starts_with("/bin/") {
       Some("系统 Python".to_string())
-    } else if path.contains("/.venv/")
-      || path.contains("/venv/")
-      || path.contains("/.virtualenvs/")
+    } else if path.contains("/.venv/") || path.contains("/venv/") || path.contains("/.virtualenvs/")
     {
       Some("虚拟环境".to_string())
     } else if path.contains("/.local/") {

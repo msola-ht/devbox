@@ -31,8 +31,8 @@ main.tsx
 DashboardPage / ToolsPage
   → useToolchainWorkspace
   → useEnvironment / useToolchain
-  → getEnvironment / listTools / refreshTools
-  → get_environment / list_tools / refresh_tools
+  → getEnvironment / refreshEnvironment / listTools / refreshTools
+  → get_environment / refresh_environment / list_tools / refresh_tools
   → EnvironmentService / ToolchainService
   → uv、Python、Node.js、npm、pnpm、Git、Bash 与 Zsh 检测插件
   → DevboxLayout / probe_version
@@ -85,15 +85,14 @@ lib.rs → all composition
 
 | 能力 | 内容 |
 | --- | --- |
-| `descriptor` | 稳定工具 ID、显示名称、说明和契约版本 |
+| `descriptor` | 稳定工具 ID、显示名称、说明、契约版本和工具类型 |
 | `executable_names` | 平台相关可执行文件名 |
-| `preferred_directories` | 登录 PATH 不可用时回退检查的显式环境目录，例如当前 Python 虚拟环境 |
-| `known_directories` | 工具常见安装目录 |
+| `current_candidate_override` | Shell 插件按默认 Shell 指定当前候选，其他插件默认解析登录 PATH |
 | `version_args` | 版本探测参数 |
 | `parse_version_output` | 工具专有版本输出解析 |
 | `source_hint` | 来源提示 |
 
-`lib.rs` 组合 `UvPlugin`、`PythonPlugin`、`NodePlugin`、`NpmPlugin`、`PnpmPlugin`、`GitPlugin`、`BashPlugin` 和 `ZshPlugin`。工具名称、平台目录、版本解析和来源提示归插件；默认 Shell 登录 PATH 解析、路径规范化、进程探测、当前安装判定、托管清单扫描、快照缓存和 revision 归工具链服务。只有无法取得登录 PATH 时才回退到 `VIRTUAL_ENV`、`CONDA_PREFIX` 和常见目录。
+`lib.rs` 组合 `UvPlugin`、`PythonPlugin`、`NodePlugin`、`NpmPlugin`、`PnpmPlugin`、`GitPlugin`、`BashPlugin` 和 `ZshPlugin`。工具名称、工具类型、版本解析、当前候选覆盖和来源提示归插件；默认 Shell 登录 PATH 解析、路径规范化、进程探测、当前安装判定、托管清单扫描、快照缓存和 revision 归工具链服务。无法取得登录 PATH 时保留明确环境状态，不使用应用进程 PATH 或其他目录冒充当前 Shell 环境。通用版本解析和路径规范化位于插件支持模块，插件之间不引用彼此内部实现。
 
 ## 后续实施顺序
 
@@ -219,8 +218,8 @@ uv 安装链路完整后，按能力复用顺序扩展：
 工具检测按插件接入：
 
 1. 在 `src-tauri/src/modules/toolchain/plugins/<tool>/` 建立插件模块。
-2. 定义稳定的 `toolId`、显示名称、说明和契约版本。
-3. 实现平台目录、可执行文件名、版本参数、版本解析和来源提示。
+2. 定义稳定的 `toolId`、显示名称、说明、契约版本和工具类型。
+3. 实现可执行文件名、当前候选覆盖（如需要）、版本参数、版本解析和来源提示。
 4. 在 `lib.rs` 注册插件。
 5. 通过 `list_tools` 和 `refresh_tools` 返回统一工具快照。
 

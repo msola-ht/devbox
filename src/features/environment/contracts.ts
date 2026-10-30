@@ -1,3 +1,9 @@
+export type ShellEnvironmentStatus =
+  | "ready"
+  | "defaultShellUnavailable"
+  | "unsupportedShell"
+  | "loginPathUnavailable"
+
 export interface EnvironmentSnapshot {
   bootId: string
   revision: string
@@ -15,4 +21,5 @@ export interface EnvironmentSnapshot {
   gpuName: string | null
   gpuCoreCount: number | null
   defaultShell: string | null
+  shellEnvironmentStatus: ShellEnvironmentStatus
 }

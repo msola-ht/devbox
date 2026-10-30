@@ -4,9 +4,7 @@ mod modules;
 mod state;
 
 use infrastructure::path::{DevboxLayout, devbox_root, ensure_layout};
-use modules::environment::{
-  EnvironmentInfo, EnvironmentService, detect_system_profile,
-};
+use modules::environment::{EnvironmentInfo, EnvironmentService, detect_system_profile};
 use modules::settings::SettingsService;
 use modules::toolchain::{
   BashPlugin, GitPlugin, NodePlugin, NpmPlugin, PluginRegistry, PnpmPlugin, PythonPlugin,
@@ -46,7 +44,7 @@ pub fn run() {
 
       let profile = tauri::async_runtime::block_on(detect_system_profile(&home_dir));
       log::info!(
-        "系统信息: version={:?} build={:?} memory_total={:?} disk_total={:?} gpu={:?} gpu_cores={:?} default_shell={:?} login_shell_path_entries={}",
+        "系统信息: version={:?} build={:?} memory_total={:?} disk_total={:?} gpu={:?} gpu_cores={:?} default_shell={:?} shell_environment_status={:?} login_shell_path_entries={}",
         profile.os_version,
         profile.os_build,
         profile.memory_total_bytes,
@@ -54,6 +52,7 @@ pub fn run() {
         profile.gpu_name,
         profile.gpu_core_count,
         profile.default_shell,
+        profile.shell_environment_status,
         profile.login_shell_path.len()
       );
       let environment = EnvironmentService::new(EnvironmentInfo {
@@ -66,6 +65,7 @@ pub fn run() {
         gpu_name: profile.gpu_name,
         gpu_core_count: profile.gpu_core_count,
         default_shell: profile.default_shell,
+        shell_environment_status: profile.shell_environment_status,
         login_shell_path: profile.login_shell_path,
         home_dir: home_dir.clone(),
         devbox_root: root.clone(),
@@ -101,6 +101,7 @@ pub fn run() {
     })
     .invoke_handler(tauri::generate_handler![
       ipc::environment::get_environment,
+      ipc::environment::refresh_environment,
       ipc::settings::get_settings,
       ipc::settings::update_settings,
       ipc::settings::test_proxy,

@@ -3,8 +3,9 @@ export { ToolSummaryCard } from "@/features/toolchain/components/tool-summary-ca
 export type {
   InstallationSummary,
   InstallationSource,
+  ToolKind,
   ToolListSnapshot,
   ToolSummary,
 } from "@/features/toolchain/contracts"
 export { useToolchain } from "@/features/toolchain/hooks/use-toolchain"
-export { filterToolsForDefaultShell } from "@/features/toolchain/model"
+export { selectVisibleTools } from "@/features/toolchain/model"

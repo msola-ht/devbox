@@ -8,6 +8,7 @@ import {
   QueryLoadingCard,
 } from "@/components/query-state-card"
 import { RefreshButton } from "@/components/refresh-button"
+import { ShellEnvironmentNotice } from "@/features/environment"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
 import {
@@ -19,19 +20,17 @@ import {
   CardTitle,
 } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
-import {
-  filterToolsForDefaultShell,
-  ToolchainEmptyState,
-  ToolSummaryCard,
-} from "@/features/toolchain"
+import { ToolchainEmptyState, ToolSummaryCard } from "@/features/toolchain"
 
 export function ToolsPage() {
-  const { environment, toolchain, loading, refreshAll } =
-    useToolchainWorkspace()
-  const defaultShell = environment.state.data?.defaultShell ?? null
-  const tools = toolchain.state.data
-    ? filterToolsForDefaultShell(toolchain.state.data.tools, defaultShell)
-    : []
+  const {
+    environment,
+    toolchain,
+    tools,
+    hasCurrentToolSnapshot,
+    loading,
+    refreshAll,
+  } = useToolchainWorkspace()
   const devboxUnavailable = environment.state.data
     ? !environment.state.data.devboxReady
     : environment.state.error !== null
@@ -52,8 +51,8 @@ export function ToolsPage() {
             工具管理
           </h1>
           <p className="max-w-2xl text-sm leading-6 text-muted-foreground">
-            当前提供已注册工具的本机检测。系统安装与 DevBox
-            托管安装分开展示，安装和切换能力将在下一阶段接入。
+            当前提供已注册工具的本机检测。每张卡片只展示默认 Shell 登录 PATH
+            中当前生效的版本，安装和切换能力将在下一阶段接入。
           </p>
         </div>
         <RefreshButton loading={loading} onClick={() => void refreshAll()} />
@@ -105,6 +104,10 @@ export function ToolsPage() {
         </CardContent>
       </Card>
 
+      {environment.state.data ? (
+        <ShellEnvironmentNotice environment={environment.state.data} />
+      ) : null}
+
       {environment.state.error && environment.state.data ? (
         <QueryErrorNotice
           code={environment.state.error.code}
@@ -120,15 +123,11 @@ export function ToolsPage() {
         />
       ) : null}
 
-      {toolchain.state.data ? (
+      {hasCurrentToolSnapshot ? (
         tools.length > 0 ? (
           <div className="grid gap-4 lg:grid-cols-2">
             {tools.map((tool) => (
-              <ToolSummaryCard
-                key={tool.toolId}
-                tool={tool}
-                defaultShell={defaultShell}
-              />
+              <ToolSummaryCard key={tool.toolId} tool={tool} />
             ))}
           </div>
         ) : (
@@ -139,7 +138,7 @@ export function ToolsPage() {
           title="无法读取工具状态"
           code={toolchain.state.error.code}
           message={toolchain.state.error.message}
-          onRetry={() => void toolchain.refresh()}
+          onRetry={() => void refreshAll()}
         />
       ) : (
         <QueryLoadingCard title="工具状态" />

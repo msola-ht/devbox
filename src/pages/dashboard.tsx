@@ -6,20 +6,21 @@ import {
   QueryLoadingCard,
 } from "@/components/query-state-card"
 import { RefreshButton } from "@/components/refresh-button"
-import { EnvironmentSummary } from "@/features/environment"
 import {
-  filterToolsForDefaultShell,
-  ToolchainEmptyState,
-  ToolSummaryCard,
-} from "@/features/toolchain"
+  EnvironmentSummary,
+  ShellEnvironmentNotice,
+} from "@/features/environment"
+import { ToolchainEmptyState, ToolSummaryCard } from "@/features/toolchain"
 
 export function DashboardPage() {
-  const { environment, toolchain, loading, refreshAll } =
-    useToolchainWorkspace()
-  const defaultShell = environment.state.data?.defaultShell ?? null
-  const tools = toolchain.state.data
-    ? filterToolsForDefaultShell(toolchain.state.data.tools, defaultShell)
-    : []
+  const {
+    environment,
+    toolchain,
+    tools,
+    hasCurrentToolSnapshot,
+    loading,
+    refreshAll,
+  } = useToolchainWorkspace()
 
   return (
     <Page>
@@ -38,6 +39,7 @@ export function DashboardPage() {
       {environment.state.data ? (
         <>
           <EnvironmentSummary environment={environment.state.data} />
+          <ShellEnvironmentNotice environment={environment.state.data} />
           {environment.state.error ? (
             <QueryErrorNotice
               code={environment.state.error.code}
@@ -51,7 +53,7 @@ export function DashboardPage() {
           title="无法读取本机环境"
           code={environment.state.error.code}
           message={environment.state.error.message}
-          onRetry={() => void environment.refresh()}
+          onRetry={() => void refreshAll()}
         />
       ) : (
         <QueryLoadingCard title="本机环境" />
@@ -62,10 +64,10 @@ export function DashboardPage() {
           <div>
             <h2 className="font-heading text-lg font-semibold">工具状态</h2>
             <p className="mt-1 text-sm text-muted-foreground">
-              系统安装保持只读，DevBox 托管版本单独展示
+              只展示默认 Shell 登录 PATH 中当前生效的版本
             </p>
           </div>
-          {toolchain.state.data ? (
+          {hasCurrentToolSnapshot ? (
             <span className="text-xs text-muted-foreground">
               已检测 {tools.length} 个工具
             </span>
@@ -79,15 +81,11 @@ export function DashboardPage() {
           />
         ) : null}
 
-        {toolchain.state.data ? (
+        {hasCurrentToolSnapshot ? (
           tools.length > 0 ? (
             <div className="grid gap-4 lg:grid-cols-2">
               {tools.map((tool) => (
-                <ToolSummaryCard
-                  key={tool.toolId}
-                  tool={tool}
-                  defaultShell={defaultShell}
-                />
+                <ToolSummaryCard key={tool.toolId} tool={tool} />
               ))}
             </div>
           ) : (
@@ -98,7 +96,7 @@ export function DashboardPage() {
             title="无法读取工具状态"
             code={toolchain.state.error.code}
             message={toolchain.state.error.message}
-            onRetry={() => void toolchain.refresh()}
+            onRetry={() => void refreshAll()}
           />
         ) : (
           <QueryLoadingCard title="工具状态" />

@@ -6,7 +6,7 @@
 
 文档定位：DevBox 唯一架构基线。当前版本提供环境查询、`.devbox` 目录初始化、uv、Python、Node.js、npm、pnpm、Git、Bash 与 Zsh 系统检测、托管清单扫描、工具快照缓存、下载代理设置和对应前端页面；安装、任务、事件、完整持久化和多平台能力按本文的交付顺序实现。
 
-当前注册的 Tauri command 为 `get_environment`、`list_tools`、`refresh_tools`、`get_settings`、`update_settings` 和 `test_proxy`。命令表中的其他能力随对应业务模块一起交付。
+当前注册的 Tauri command 为 `get_environment`、`refresh_environment`、`list_tools`、`refresh_tools`、`get_settings`、`update_settings` 和 `test_proxy`。命令表中的其他能力随对应业务模块一起交付。
 
 ## 目标与边界
 
@@ -373,15 +373,16 @@ src/features/
 
 检测由环境模块和工具插件共同完成，不扫描整个磁盘。
 
-1. 环境模块在启动时识别操作系统版本、CPU 架构、用户主目录、账户默认 Shell、内存、主目录所在卷容量和 GPU 等规格；查询只读取快照，不做持续采样或实时用量统计。
+1. 环境模块在启动和显式刷新时识别操作系统版本、CPU 架构、用户主目录、账户默认 Shell、内存、主目录所在卷容量和 GPU 等规格；查询只读取快照，不做持续采样或实时用量统计。
 2. 托管检测读取 `.devbox/tools` 下的安装清单。
 3. 系统检测使用账户默认 Bash/Zsh 的登录环境 PATH，按顺序选择每个工具的第一个可执行文件；Bash、Zsh 使用账户记录的默认 Shell 路径。
 4. 对当前可执行文件执行版本命令，按插件规则解析并记录绝对路径、来源和健康状态。探测 npm/pnpm 等脚本时复用同一登录 PATH。
-5. 工具快照保留已扫描的托管安装，但 `currentInstallationId` 只指向当前生效安装，界面每张工具卡只展示该项。
+5. 工具快照将登录 PATH 解析出的 `effectiveInstallation`、托管安装库存和 active 指针分开表达；界面每张工具卡只展示当前生效安装，不把 active 状态冒充登录 PATH 中的当前版本。
+6. 环境快照可显式刷新并递增 revision；工具链缓存按环境 revision 失效，避免默认 Shell 或登录 PATH 变化后继续使用旧结果。
 
 当前硬件规格检测以 macOS 为主：macOS 提供系统版本、内存、主目录所在卷容量、GPU 和账户默认 Shell，Linux 提供系统版本、内存、容量和账户默认 Shell，Windows 目前只提供系统版本。未实现的字段显式返回 null，界面显示“未知”，待对应平台原生验证后补齐。
 
-登录 PATH 通过默认 Bash/Zsh 的固定 `-l -c` 打印命令读取，启动过程可能执行用户登录配置；命令不接受前端输入，并受超时和输出上限约束。
+登录 PATH 通过默认 Bash/Zsh 的固定 `-l -c` 打印命令读取，启动过程可能执行用户登录配置；命令不接受前端输入，并受超时和输出上限约束。读取失败、超时或默认 Shell 不受支持时返回明确状态，不回退到应用进程 PATH。
 
 检测只读运行，不安装、不更新、不修改 PATH。系统工具版本异常不能阻止 DevBox 展示其他工具。
 
@@ -499,6 +500,7 @@ resolving -> downloading -> verifying -> extracting
 | 命令 | 实现状态 | 用途 |
 | --- | --- | --- |
 | `get_environment` | 已实现 | 查询系统、架构、托管目录和可用状态 |
+| `refresh_environment` | 已实现 | 重新检测系统规格、默认 Shell 和登录 PATH，返回新 revision |
 | `list_tools` | 已实现 | 查询工具、系统安装、托管安装和更新状态 |
 | `refresh_tools` | 已实现 | 重新执行系统安装和托管安装检测 |
 | `get_settings` | 已实现 | 查询版本化设置；返回代理配置和当前系统代理读取结果 |
@@ -742,7 +744,7 @@ UI -> 使用权威快照更新任务与工具状态
 
 首个安装链路的目标命令面：
 
-- 查询：`get_environment`、`refresh_tools`、`list_tools`、`get_tool`、`list_tool_releases`、`refresh_tool_releases`、`list_operations`、`get_operation`。
+- 查询：`get_environment`、`refresh_environment`、`refresh_tools`、`list_tools`、`get_tool`、`list_tool_releases`、`refresh_tool_releases`、`list_operations`、`get_operation`。
 - 写入：`start_install`、`start_update`、`activate_version`、`cancel_operation`、`subscribe_operation`。
 - 当前提供代理设置与连接测试 UI；卸载、缓存清理、安装修复和 Shell 集成 UI 尚未提供。
 

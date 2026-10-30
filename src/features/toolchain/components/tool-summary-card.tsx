@@ -12,11 +12,9 @@ import type {
   ToolSummary,
 } from "@/features/toolchain/contracts"
 import {
-  getCurrentInstallation,
   getToolStatus,
   installationKey,
   isActiveManagedInstallation,
-  isDefaultShellTool,
 } from "@/features/toolchain/model"
 import { Badge } from "@/components/ui/badge"
 import {
@@ -89,16 +87,9 @@ function InstallationRow({
   )
 }
 
-export function ToolSummaryCard({
-  tool,
-  defaultShell = null,
-}: {
-  tool: ToolSummary
-  defaultShell?: string | null
-}) {
+export function ToolSummaryCard({ tool }: { tool: ToolSummary }) {
   const status = getToolStatus(tool)
-  const isDefaultShell = isDefaultShellTool(tool, defaultShell)
-  const currentInstallation = getCurrentInstallation(tool)
+  const currentInstallation = tool.effectiveInstallation
 
   return (
     <Card>
@@ -106,16 +97,21 @@ export function ToolSummaryCard({
         <CardTitle className="flex items-center gap-2">
           <PackageIcon className="size-4 text-muted-foreground" />
           {tool.displayName}
-          {isDefaultShell ? (
+          {tool.isDefaultShell ? (
             <Badge variant="outline">系统 Shell 默认</Badge>
           ) : null}
         </CardTitle>
         <CardDescription>{tool.description}</CardDescription>
         {status.label ? (
-          <CardAction>
+          <CardAction className="flex flex-col items-end gap-1">
             <Badge variant={status.active ? "default" : "secondary"}>
               {status.label}
             </Badge>
+            {tool.activeInstallationErrorCode ? (
+              <Badge variant="destructive">
+                {tool.activeInstallationErrorCode}
+              </Badge>
+            ) : null}
           </CardAction>
         ) : null}
       </CardHeader>
@@ -129,7 +125,7 @@ export function ToolSummaryCard({
               <EmptyTitle>当前环境未发现 {tool.displayName}</EmptyTitle>
               <EmptyDescription>
                 默认 Shell 登录 PATH
-                中没有可用版本。当前阶段只执行只读检测，安装与版本切换将在后续阶段接入。
+                中没有当前生效版本。当前阶段只执行只读检测，安装与版本切换将在后续阶段接入。
               </EmptyDescription>
             </EmptyHeader>
           </Empty>
