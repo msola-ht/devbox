@@ -1,45 +1,17 @@
 package main
 
 import (
+	"devbox/internal/systeminfo"
 	"log"
-	"runtime"
-	"time"
 
 	"github.com/egoist/mygo"
 )
 
-// Greeter is callable from the frontend: `mygo generate` turns its methods
-// into typed TypeScript functions in src/mygo.ts.
-type Greeter struct{}
-
-// Greet returns a greeting for name.
-func (Greeter) Greet(name string) string {
-	if name == "" {
-		name = "stranger"
-	}
-	return "Hello, " + name + "! This message comes from Go."
-}
-
-// SystemInfo describes the machine the app runs on.
-type SystemInfo struct {
-	OS        string `json:"os"`
-	Arch      string `json:"arch"`
-	GoVersion string `json:"goVersion"`
-}
-
-// Info returns information about the system.
-func (Greeter) Info() SystemInfo {
-	return SystemInfo{OS: runtime.GOOS, Arch: runtime.GOARCH, GoVersion: runtime.Version()}
-}
-
-// Tick is sent to the page every second.
-var Tick = mygo.NewEvent[time.Time]("tick")
-
 func main() {
-	mygo.Bind(Greeter{})
+	mygo.BindAs("SystemService", systeminfo.Service{})
 
 	mygo.App.WhenReady(func() {
-		win := mygo.NewWindow(mygo.WindowOptions{
+		mygo.NewWindow(mygo.WindowOptions{
 			Title:           "devbox",
 			Width:           1280,
 			Height:          720,
@@ -48,19 +20,9 @@ func main() {
 			MinHeight:       360,
 			BackgroundColor: "light-dark(#f6f7f9, #0f1115)",
 			// The frontend: devUrl during `mygo dev`, frontendDist
-			// embedded by `mygo build` otherwise (see mygo.json).
+			// embedded by `mygo build` otherwise (see mygo.config.ts).
 			URL: "/",
 		})
-		go func() {
-			ticker := time.NewTicker(time.Second)
-			defer ticker.Stop()
-
-			for t := range ticker.C {
-				if Tick.Emit(win, t) != nil {
-					return // the window was closed
-				}
-			}
-		}()
 	})
 	if err := mygo.App.Run(); err != nil {
 		log.Fatal(err)

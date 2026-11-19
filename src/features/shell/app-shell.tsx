@@ -38,7 +38,7 @@ export function AppShell({ sidebar, breadcrumb, children }: AppShellProps) {
               <SidebarTrigger className="-ml-1" />
               <Separator
                 orientation="vertical"
-                className="mr-2 h-4 self-center"
+                className="mr-2 h-4 w-px self-center bg-border"
               />
               {breadcrumb}
               <div className="ml-auto">
@@ -46,7 +46,7 @@ export function AppShell({ sidebar, breadcrumb, children }: AppShellProps) {
               </div>
             </div>
           </header>
-          <div className="flex flex-1 flex-col gap-4 p-4 pt-0">{children}</div>
+          <div className="flex flex-1 flex-col p-4 pt-0">{children}</div>
         </SidebarInset>
       </SidebarProvider>
     </TooltipProvider>

@@ -30,7 +30,9 @@ export function App() {
       sidebar={<AppSidebar />}
       breadcrumb={<PageBreadcrumb items={[...route.parents, route.title]} />}
     >
-      <Page />
+      <section className="grid w-full gap-4">
+        <Page />
+      </section>
     </AppShell>
   );
 }
