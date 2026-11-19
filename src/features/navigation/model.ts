@@ -1,20 +1,10 @@
 import type { LucideIcon } from "lucide-react";
 
-export interface NavigationLink {
-  title: string;
-  url: string;
-}
+import type { AppPath } from "@/app-routes";
 
-export interface NavigationGroup {
+export interface NavigationItem {
   title: string;
-  icon: LucideIcon;
-  isActive?: boolean;
-  items?: readonly NavigationLink[];
-}
-
-export interface Project {
-  name: string;
-  url: string;
+  url: AppPath;
   icon: LucideIcon;
 }
 
@@ -32,7 +22,6 @@ export interface User {
 
 export interface SidebarData {
   user: User;
-  teams: readonly Team[];
-  navigation: readonly NavigationGroup[];
-  projects: readonly Project[];
+  team: Team;
+  navigation: readonly NavigationItem[];
 }

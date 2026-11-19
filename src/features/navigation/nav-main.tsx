@@ -1,56 +1,43 @@
-import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from "@/components/ui/collapsible";
+import { Link, useLocation } from "react-router";
 import {
   SidebarGroup,
   SidebarGroupLabel,
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
-  SidebarMenuSub,
-  SidebarMenuSubButton,
-  SidebarMenuSubItem,
+  useSidebar,
 } from "@/components/ui/sidebar";
-import { ChevronRightIcon } from "lucide-react";
 
-import type { NavigationGroup } from "./model";
+import type { NavigationItem } from "./model";
 
-export function NavMain({ items }: { items: readonly NavigationGroup[] }) {
+export function NavMain({ items }: { items: readonly NavigationItem[] }) {
+  const { pathname } = useLocation();
+  const { setOpenMobile } = useSidebar();
+
+  function handleNavigate() {
+    setOpenMobile(false);
+  }
+
   return (
     <SidebarGroup>
-      <SidebarGroupLabel>Platform</SidebarGroupLabel>
-      <SidebarMenu>
+      <SidebarGroupLabel>控制台</SidebarGroupLabel>
+      <SidebarMenu className="gap-px">
         {items.map((item) => {
           const Icon = item.icon;
+          const isActive = item.url === pathname;
 
           return (
-            <Collapsible
-              key={item.title}
-              defaultOpen={item.isActive}
-              className="group/collapsible"
-              render={<SidebarMenuItem />}
-            >
-              <CollapsibleTrigger
-                render={<SidebarMenuButton tooltip={item.title} />}
+            <SidebarMenuItem key={item.url}>
+              <SidebarMenuButton
+                tooltip={item.title}
+                isActive={isActive}
+                aria-current={isActive ? "page" : undefined}
+                render={<Link to={item.url} onClick={handleNavigate} />}
               >
                 <Icon />
                 <span>{item.title}</span>
-                <ChevronRightIcon className="ml-auto transition-transform duration-200 group-data-open/collapsible:rotate-90" />
-              </CollapsibleTrigger>
-              <CollapsibleContent>
-                <SidebarMenuSub>
-                  {item.items?.map((subItem) => (
-                    <SidebarMenuSubItem key={subItem.title}>
-                      <SidebarMenuSubButton render={<a href={subItem.url} />}>
-                        <span>{subItem.title}</span>
-                      </SidebarMenuSubButton>
-                    </SidebarMenuSubItem>
-                  ))}
-                </SidebarMenuSub>
-              </CollapsibleContent>
-            </Collapsible>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
           );
         })}
       </SidebarMenu>

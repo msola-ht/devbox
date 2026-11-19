@@ -8,7 +8,7 @@ import {
 import { NavMain } from "@/features/navigation/nav-main";
 import { NavProjects } from "@/features/navigation/nav-projects";
 import { NavUser } from "@/features/navigation/nav-user";
-import { TeamSwitcher } from "@/features/navigation/team-switcher";
+import { TeamHeader } from "@/features/navigation/team-header";
 
 import { navigationData } from "./data";
 
@@ -16,11 +16,11 @@ export function AppSidebar() {
   return (
     <Sidebar collapsible="icon">
       <SidebarHeader>
-        <TeamSwitcher teams={navigationData.teams} />
+        <TeamHeader team={navigationData.team} />
       </SidebarHeader>
       <SidebarContent>
         <NavMain items={navigationData.navigation} />
-        <NavProjects projects={navigationData.projects} />
+        <NavProjects />
       </SidebarContent>
       <SidebarFooter>
         <NavUser user={navigationData.user} />
