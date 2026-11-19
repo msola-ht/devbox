@@ -1,0 +1,29 @@
+# 依赖与构建产物
+node_modules/
+/dist/
+/build/
+/.mygo/
+mygo_windows_*.syso
+
+# 缓存、覆盖率与日志
+.cache/
+.vite/
+coverage/
+*.log
+
+# 本地环境变量
+.env
+.env.*
+!.env.example
+
+# 编辑器和系统临时文件
+.DS_Store
+Thumbs.db
+*.tmp
+*.temp
+*.swp
+*.swo
+*~
+
+# 误创建的嵌套仓库
+/main/
