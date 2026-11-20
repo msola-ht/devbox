@@ -1,70 +1,66 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
+import { useLatestRequest } from "@/hooks/use-latest-request";
 import { SystemService, type SystemSnapshot } from "@/mygo";
 
 interface SystemInfoState {
   snapshot: SystemSnapshot | null;
-  refreshing: boolean;
+  pending: "loading" | "refreshing" | null;
   error: string | null;
 }
 
 export function useSystemInfo() {
   const [state, setState] = useState<SystemInfoState>({
     snapshot: null,
-    refreshing: true,
+    pending: "loading",
     error: null,
   });
-  const activeRequest = useRef<AbortController | null>(null);
+  const startRequest = useLatestRequest();
 
   const refresh = useCallback(async () => {
-    activeRequest.current?.abort();
-    const controller = new AbortController();
-    activeRequest.current = controller;
-    setState((current) => ({ ...current, refreshing: true, error: null }));
+    const signal = startRequest();
+    setState((current) => ({ ...current, pending: "refreshing", error: null }));
 
     try {
-      const snapshot = await SystemService.refresh.with({
-        signal: controller.signal,
-      })();
-      if (!controller.signal.aborted) {
-        setState({ snapshot, refreshing: false, error: null });
+      const snapshot = await SystemService.refresh.with({ signal })();
+      if (!signal.aborted) {
+        setState({ snapshot, pending: null, error: null });
       }
     } catch {
-      if (!controller.signal.aborted) {
+      if (!signal.aborted) {
         setState((current) => ({
           ...current,
-          refreshing: false,
+          pending: null,
           error: "暂时无法读取系统信息，请重试。",
         }));
       }
     }
-  }, []);
+  }, [startRequest]);
 
   useEffect(() => {
-    const controller = new AbortController();
-    activeRequest.current = controller;
+    const signal = startRequest();
 
     async function load() {
       try {
-        const snapshot = await SystemService.getSnapshot.with({
-          signal: controller.signal,
-        })();
-        if (controller.signal.aborted) return;
-        if (snapshot) setState((current) => ({ ...current, snapshot }));
+        const snapshot = await SystemService.getSnapshot.with({ signal })();
+        if (signal.aborted) return;
+        if (snapshot) {
+          setState({ snapshot, pending: null, error: null });
+          return;
+        }
       } catch (error) {
         // A failed cache read must not prevent collecting fresh information.
-        if (!controller.signal.aborted) {
+        if (!signal.aborted) {
           console.warn("读取系统信息快照失败", error);
         }
       }
 
-      if (!controller.signal.aborted) await refresh();
+      if (!signal.aborted) await refresh();
     }
 
     void load();
 
-    return () => activeRequest.current?.abort();
-  }, [refresh]);
+  }, [refresh, startRequest]);
 
   return { ...state, refresh };
 }

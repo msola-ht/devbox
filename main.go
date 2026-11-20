@@ -1,7 +1,9 @@
 package main
 
 import (
+	"devbox/internal/devtools"
 	"devbox/internal/proxy"
+	"devbox/internal/runtimeenv"
 	"devbox/internal/systeminfo"
 	"log"
 
@@ -9,8 +11,10 @@ import (
 )
 
 func main() {
-	mygo.BindAs("SystemService", systeminfo.Service{})
+	mygo.BindAs("SystemService", &systeminfo.Service{})
+	mygo.BindAs("EnvironmentService", runtimeenv.Service{})
 	mygo.BindAs("ProxyService", &proxy.Service{})
+	mygo.BindAs("DevToolsService", devtools.Service{})
 
 	mygo.App.WhenReady(func() {
 		mygo.NewWindow(mygo.WindowOptions{

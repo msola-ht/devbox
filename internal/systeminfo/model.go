@@ -2,29 +2,22 @@ package systeminfo
 
 import "time"
 
-// GPUInfo describes a graphics processor. CoreCount is null when unavailable.
+// GPUInfo identifies a graphics processor by its reported model.
 type GPUInfo struct {
-	Model     string `json:"model"`
-	CoreCount *int   `json:"coreCount"`
+	Model string `json:"model"`
 }
 
 // SystemInfo describes the machine running the app.
 // Numeric measurements are null when unavailable.
 type SystemInfo struct {
-	OS                   string    `json:"os"`
-	OSName               string    `json:"osName"`
-	OSVersion            string    `json:"osVersion"`
-	Hostname             string    `json:"hostname"`
-	Arch                 string    `json:"arch"`
-	GoVersion            string    `json:"goVersion"`
-	CPUModel             string    `json:"cpuModel"`
-	GPUs                 []GPUInfo `json:"gpus"`
-	PhysicalCores        *int      `json:"physicalCores"`
-	LogicalCores         *int      `json:"logicalCores"`
-	MemoryTotalBytes     *uint64   `json:"memoryTotalBytes"`
-	MemoryAvailableBytes *uint64   `json:"memoryAvailableBytes"`
-	DiskTotalBytes       *uint64   `json:"diskTotalBytes"`
-	UptimeSeconds        *uint64   `json:"uptimeSeconds"`
+	OS               string    `json:"os"`
+	OSName           string    `json:"osName"`
+	OSVersion        string    `json:"osVersion"`
+	Arch             string    `json:"arch"`
+	CPUModel         string    `json:"cpuModel"`
+	GPUs             []GPUInfo `json:"gpus"`
+	MemoryTotalBytes *uint64   `json:"memoryTotalBytes"`
+	DiskTotalBytes   *uint64   `json:"diskTotalBytes"`
 }
 
 // SystemSnapshot contains system information and the time collection completed.

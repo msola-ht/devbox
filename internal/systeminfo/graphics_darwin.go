@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"os/exec"
-	"strconv"
 	"strings"
 )
 
@@ -17,7 +16,6 @@ func graphicsInfo(ctx context.Context) []GPUInfo {
 	var displays struct {
 		Devices []struct {
 			Model string `json:"sppci_model"`
-			Cores string `json:"sppci_cores"`
 		} `json:"SPDisplaysDataType"`
 	}
 	if err := json.Unmarshal(output, &displays); err != nil {
@@ -27,11 +25,7 @@ func graphicsInfo(ctx context.Context) []GPUInfo {
 	var devices []GPUInfo
 	for _, device := range displays.Devices {
 		if model := strings.TrimSpace(device.Model); model != "" {
-			gpu := GPUInfo{Model: model}
-			if cores, err := strconv.Atoi(strings.TrimSpace(device.Cores)); err == nil && cores > 0 {
-				gpu.CoreCount = &cores
-			}
-			devices = append(devices, gpu)
+			devices = append(devices, GPUInfo{Model: model})
 		}
 	}
 	return devices

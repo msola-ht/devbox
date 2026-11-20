@@ -2,7 +2,6 @@ package systeminfo
 
 import (
 	"context"
-	"os"
 	"runtime"
 	"sync"
 
@@ -18,10 +17,9 @@ func collect(ctx context.Context) (SystemInfo, error) {
 		return SystemInfo{}, err
 	}
 	info := SystemInfo{
-		OS:        runtime.GOOS,
-		OSName:    platformName(runtime.GOOS),
-		Arch:      runtime.GOARCH,
-		GoVersion: runtime.Version(),
+		OS:     runtime.GOOS,
+		OSName: platformName(runtime.GOOS),
+		Arch:   runtime.GOARCH,
 	}
 
 	// Run slow platform commands independently within the caller's deadline.
@@ -29,27 +27,14 @@ func collect(ctx context.Context) (SystemInfo, error) {
 	collectors.Go(func() { info.DiskTotalBytes = physicalDiskCapacity(ctx) })
 	collectors.Go(func() { info.GPUs = graphicsInfo(ctx) })
 
-	if hostname, err := os.Hostname(); err == nil {
-		info.Hostname = hostname
-	}
 	if _, _, version, err := host.PlatformInformationWithContext(ctx); err == nil {
 		info.OSVersion = version
 	}
 	if processors, err := cpu.InfoWithContext(ctx); err == nil && len(processors) > 0 {
 		info.CPUModel = processors[0].ModelName
 	}
-	if count, err := cpu.CountsWithContext(ctx, false); err == nil && count > 0 {
-		info.PhysicalCores = &count
-	}
-	if count, err := cpu.CountsWithContext(ctx, true); err == nil && count > 0 {
-		info.LogicalCores = &count
-	}
 	if memory, err := mem.VirtualMemoryWithContext(ctx); err == nil {
 		info.MemoryTotalBytes = &memory.Total
-		info.MemoryAvailableBytes = &memory.Available
-	}
-	if uptime, err := host.UptimeWithContext(ctx); err == nil {
-		info.UptimeSeconds = &uptime
 	}
 	collectors.Wait()
 

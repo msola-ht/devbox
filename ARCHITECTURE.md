@@ -14,11 +14,15 @@ Devbox 使用 MyGo 承载 React 界面和 Go 本机服务。前端负责展示�
 | [src/app.tsx](src/app.tsx) | 将合法路由映射为页面，组合应用外壳、导航和页面 |
 | [src/app-routes.ts](src/app-routes.ts) | 定义路由及标题，校验路径，保存与恢复上次页面 |
 | [src/features](src/features/index.md) | 按业务组织页面、组件、Hook 和业务内工具 |
+| [src/features/runtime-env](src/features/runtime-env/index.md) | 概览页的运行环境展示与刷新 |
+| [src/features/devtools](src/features/devtools/index.md) | 开发工具检测结果与刷新入口 |
 | [src/features/settings](src/features/settings/index.md) | 代理设置、配置恢复和连接检查 |
 | [src/components/ui](src/components/ui/index.md) | shadcn 基础组件，由业务组件组合使用 |
 | [src/lib](src/lib/index.md) | 已被复用的通用前端工具 |
 | [src/mygo.ts](src/mygo.ts) | MyGo 生成的 TypeScript 类型与服务调用入口 |
 | [internal/systeminfo](internal/systeminfo/index.md) | 当前的系统信息业务，包括采集、快照存储与服务编排 |
+| [internal/runtimeenv](internal/runtimeenv/index.md) | 用户主目录和默认登录 Shell 查询 |
+| [internal/devtools](internal/devtools/index.md) | 本机开发工具检测 |
 | [internal/proxy](internal/proxy/index.md) | 代理配置、路由解析和连接检查 |
 | [internal/configfile](internal/configfile/index.md) | 配置文件定位和 JSON 写入 |
 
@@ -34,6 +38,8 @@ flowchart TD
     Hook --> Client[MyGo 生成接口]
     Client --> Service[Go Service]
     Service --> System[系统信息]
+    Service --> Environment[运行环境]
+    Service --> DevTools[开发工具检测]
     Service --> Proxy[代理设置]
     System --> Collector[系统采集]
     System --> Snapshot[快照存储]
@@ -53,7 +59,7 @@ flowchart TD
 
 ### 当前通信入口
 
-Go 在 `main.go` 中注册系统信息服务 `SystemService` 和代理设置服务 `ProxyService`。前端通过 `src/mygo.ts` 中生成的服务调用，业务组件通过 Hook 使用它们。
+Go 在 `main.go` 中注册系统信息服务 `SystemService`、运行环境服务 `EnvironmentService`、开发工具服务 `DevToolsService` 和代理设置服务 `ProxyService`。业务 Hook 通过 `src/mygo.ts` 中生成的接口调用它们。
 
 `src/mygo.ts` 是生成产物，类型与方法签名以 Go 定义为源。修改 Go 对外契约后运行 `bun run generate`，同步调整调用方并检查类型。前端共用生成类型与调用入口。
 
@@ -78,18 +84,20 @@ MyGo 接口生成会执行应用入口直到 `App.Run`。入口中保持服务�
 
 ### 取消、错误与并发
 
-- 前端请求使用 `AbortController`。开始新刷新或组件卸载时取消旧请求；仅当前有效请求的结果更新界面。
+- 前端请求使用 `AbortController`。系统信息、运行环境和开发工具通过 [use-latest-request.ts](src/hooks/use-latest-request.ts) 在新请求开始或组件卸载时取消旧请求。仅当前有效请求的结果更新界面。
 - Go 耗时调用接收 `context.Context`，并传给支持取消的系统接口、外部命令和网络操作。系统信息 Service 设置五秒采集超时。
 - Go 返回的错误使前端 Promise 拒绝。Hook 将其转换为界面状态，组件展示提示并提供重试；取消的请求保持安静。
-- 多个 MyGo 调用可以同时执行。系统信息 Service 无共享可变内存状态，每次刷新各自采集；文件使用临时文件写入后替换，后一次成功替换决定磁盘快照内容。
+- 多个 MyGo 调用可以同时执行。系统信息服务在锁外采集，用互斥锁协调内存快照更新和文件读写。文件使用临时文件写入后替换。
 - `ProxyService` 持有代理配置，用互斥锁协调读取、保存与恢复。连接检查使用每次调用传入的表单草稿。
 
 ## 状态与持久化归属
 
 | 数据 | 归属与保存方式 |
 | --- | --- |
-| 系统信息 | 本机采集为数据来源，Go 文件快照保存上次结果 |
+| 系统信息 | 本机采集为数据来源，`SystemService` 保留本次运行中最近一次采集结果，文件快照供下次启动读取 |
 | 当前展示的快照、刷新中和错误 | 业务 Hook 的 React 内存状态 |
+| 运行环境 | 概览页的 React 内存状态，每次进入或刷新时重新读取 |
+| 开发工具检测结果 | 开发工具页面的 React 内存状态，每次进入或刷新时重新读取 |
 | 代理设置 | `ProxyService` 和 `os.UserConfigDir()/devbox/proxy.json` |
 | 代理表单草稿和连接检查状态 | 设置页面的 React 内存状态 |
 | 主题、侧栏展开状态、上次页面 | 前端 `localStorage`，分别由主题、外壳和路由模块管理 |
@@ -103,7 +111,7 @@ MyGo 接口生成会执行应用入口直到 `App.Run`。入口中保持服务�
 | 文件 | 职责 |
 | --- | --- |
 | [model.go](internal/systeminfo/model.go) | 定义 `SystemInfo`、`GPUInfo` 和带采集时间的 `SystemSnapshot` |
-| [service.go](internal/systeminfo/service.go) | 提供 `GetSnapshot`、`Refresh`，组合采集、超时和保存策略 |
+| [service.go](internal/systeminfo/service.go) | 提供 `GetSnapshot`、`Refresh`，管理采集超时和内存快照，协调文件保存 |
 | [collector.go](internal/systeminfo/collector.go) | 采集本机数据，协调独立的 GPU、磁盘查询 |
 | [snapshot_store.go](internal/systeminfo/snapshot_store.go) | 解析文件位置、读取和校验快照、写入并替换快照文件 |
 | `graphics_<平台>.go` | 通过对应平台的系统命令读取 GPU 信息 |
@@ -115,26 +123,49 @@ MyGo 接口生成会执行应用入口直到 `App.Run`。入口中保持服务�
 
 | 前端调用 | 成功返回 | 行为与错误 |
 | --- | --- | --- |
-| `SystemService.getSnapshot()` | `SystemSnapshot \| null` | 只读取文件；文件缺失或快照不兼容时返回 `null`，读取或解析失败时拒绝 |
-| `SystemService.refresh()` | `SystemSnapshot` | 重新采集并尝试保存；采集取消或超时时拒绝，保存失败记日志并返回本次采集结果 |
+| `SystemService.getSnapshot()` | `SystemSnapshot \| null` | 优先返回内存快照，其次读取文件。文件缺失或快照不兼容时返回 `null`，读取或解析失败时拒绝 |
+| `SystemService.refresh()` | `SystemSnapshot` | 重新采集并更新内存快照，再尝试写入文件。采集取消或超时时拒绝，文件保存失败记日志并返回本次结果 |
 
-`SystemSnapshot` 包含 `info` 和 `collectedAt`。`collectedAt` 是采集完成的 UTC 时间，经生成接口表示为字符串，由前端格式化展示。`refresh()` 的成功表示采集完成；文件保存采用尽力写入策略。
+`SystemSnapshot` 包含 `info` 和 `collectedAt`。`collectedAt` 是采集完成的 UTC 时间，经生成接口表示为字符串。`refresh()` 的成功表示采集完成；文件保存采用尽力写入策略。
 
 ### 页面加载与刷新
 
-1. 页面挂载后调用 `getSnapshot()`，有快照时先展示。
-2. 读取结束后调用 `refresh()`，更新显示内容和采集时间。快照读取失败记录警告，仍继续采集。
+1. 进入概览时调用 `getSnapshot()`，有可用快照就直接展示。
+2. 快照缺失、不兼容或读取失败时调用 `refresh()` 采集，成功后尝试保存。读取失败记录警告。
 3. 刷新过程中保留已有数据，禁用刷新按钮。首次没有数据时在原位置显示 Skeleton。
 4. 刷新失败时保留已有快照并提示；首次加载失败时展示错误。用户可通过按钮重试。
 5. 开始新刷新或离开页面时取消当前请求。
 
-加载状态和请求协调集中在 [use-system-info.ts](src/features/system/use-system-info.ts)，展示集中在 [system-info-card.tsx](src/features/system/system-info-card.tsx)。刷新由页面挂载和用户操作触发，每次都实际采集；快照时间用于说明数据来源时间。
+加载状态和请求协调集中在 [use-system-info.ts](src/features/system/use-system-info.ts)，展示集中在 [system-info-card.tsx](src/features/system/system-info-card.tsx)。刷新按钮触发实际采集并更新快照。
 
 ### 快照文件
 
 文件位置为 `os.UserConfigDir()/devbox/system-info.json`，macOS 对应 `~/Library/Application Support/devbox/system-info.json`。
 
-当前文件格式版本为 `2`，包含 `version`、`info` 和 `collectedAt`。读取时校验版本、采集时间非零、操作系统和架构。旧格式或不兼容快照会在下次成功采集并写入后被替换。快照和代理设置通过 `configfile` 定位文件并写入同目录临时文件，完成编码和关闭后再替换目标文件。
+当前文件格式版本为 `2`，包含 `version`、`info` 和 `collectedAt`。读取时校验版本、采集时间非零、操作系统和架构，额外的 JSON 字段会被忽略。旧格式或不兼容快照会在下次成功采集并写入后被替换。快照和代理设置通过 `configfile` 定位文件并写入同目录临时文件，完成编码和关闭后再替换目标文件。
+
+## 运行环境
+
+概览页在系统信息右侧显示[运行环境卡片](src/features/runtime-env/environment-card.tsx)，内容较窄时改为纵向排列。卡片通过 `EnvironmentService.get()` 读取用户主目录和默认登录 Shell。页面进入或手动刷新时读取，离开页面会取消当前请求。结果保存在页面内存中。
+
+`homeDir` 由 Go 的 `os.UserHomeDir` 读取，桌面端取自进程的 `HOME` 或 `USERPROFILE`。在 macOS 和 Linux 上，`loginShell` 通过 UID 查询系统账号，分别调用 `/usr/bin/dscacheutil` 和 `/usr/bin/getent`。查询期限为两秒。主目录缺失、默认登录 Shell 查询失败或平台不适用时，对应字段为空，页面显示“暂不可用”。
+
+命令定位使用 Devbox 进程的 `PATH`。
+
+## 开发工具检测
+
+“开发工具”页面位于 `/tools`。当前包含 Homebrew，进入页面和手动刷新均由 [use-homebrew.ts](src/features/devtools/use-homebrew.ts) 调用 `DevToolsService.detectHomebrew()`。开始新请求或离开页面时取消旧请求，已取消的请求不会更新页面。
+
+Go 的 [DetectHomebrew](internal/devtools/homebrew.go) 先从应用进程的 `PATH` 查找绝对可执行入口。未解析到可用绝对入口时检查 `/opt/homebrew/bin/brew` 和 `/usr/local/bin/brew`，按应用进程架构优先选择对应的默认路径。选定入口后直接执行 `brew --version`，命令的截止时间为五秒。返回的路径是本次执行使用的入口。
+
+| `status` | 含义 |
+| --- | --- |
+| `available` | 命令成功并返回可识别的版本，包含 `path` 和 `version` |
+| `not_found` | 应用的 `PATH` 和两个默认位置均未找到可用入口 |
+| `failed` | 入口无法使用、命令执行失败或超时、版本格式未识别，包含 `message` 及已知的 `path` |
+| `unsupported` | 当前系统不是 macOS，跳过查找和执行 |
+
+业务状态随普通响应返回。调用取消通过 MyGo 结束请求，检测结果仅保存在当前页面。
 
 ## 代理设置
 

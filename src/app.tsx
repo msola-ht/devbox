@@ -2,6 +2,7 @@ import { useEffect, type ComponentType } from "react";
 import { Navigate, useLocation } from "react-router";
 
 import { appRoutes, isAppPath, saveLastRoute, type AppPath } from "@/app-routes";
+import { DevToolsPage } from "@/features/devtools/dev-tools-page";
 import { AppSidebar } from "@/features/navigation/app-sidebar";
 import { PageBreadcrumb } from "@/features/navigation/page-breadcrumb";
 import { SettingsPage } from "@/features/settings/settings-page";
@@ -10,6 +11,7 @@ import { WorkspacePage } from "@/features/workspace/workspace-page";
 
 const pageComponents: Record<AppPath, ComponentType> = {
   "/": WorkspacePage,
+  "/tools": DevToolsPage,
   "/settings": SettingsPage,
 };
 

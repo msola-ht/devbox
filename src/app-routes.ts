@@ -2,6 +2,7 @@ import { getStoredValue, setStoredValue } from "@/lib/storage";
 
 export const appRoutes = {
   "/": { title: "概览", parents: [] },
+  "/tools": { title: "开发工具", parents: [] },
   "/settings": { title: "设置", parents: [] },
 } as const;
 

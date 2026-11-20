@@ -4,7 +4,6 @@ import {
   Card,
   CardAction,
   CardContent,
-  CardDescription,
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
@@ -16,13 +15,15 @@ import {
   ItemTitle,
 } from "@/components/ui/item";
 import { Skeleton } from "@/components/ui/skeleton";
-import { formatBytes, formatCollectedAt } from "@/features/system/formatters";
+import { formatBytes } from "@/features/system/formatters";
 import { useSystemInfo } from "@/features/system/use-system-info";
 
 export function SystemInfoCard() {
   const state = useSystemInfo();
   const systemInfo = state.snapshot?.info;
-  const loading = !state.snapshot && state.refreshing;
+  const busy = state.pending !== null;
+  const loading = !state.snapshot && busy;
+  const pendingLabel = state.pending === "loading" ? "读取中…" : "刷新中…";
 
   const isAppleSilicon =
     systemInfo?.os === "darwin" && systemInfo.cpuModel.startsWith("Apple ");
@@ -45,8 +46,8 @@ export function SystemInfoCard() {
     {
       label: "内存与存储",
       value: [
-        memory ? `${memory} 内存` : "内存容量暂不可用",
-        disk ? `${disk} 硬盘` : "硬盘容量暂不可用",
+        memory ?? "内存容量暂不可用",
+        disk ?? "硬盘容量暂不可用",
       ].join(" · "),
     },
   ];
@@ -55,24 +56,19 @@ export function SystemInfoCard() {
     <Card>
       <CardHeader>
         <CardTitle>系统信息</CardTitle>
-        <CardDescription aria-live="polite">
-          {state.snapshot
-            ? `采集于 ${formatCollectedAt(state.snapshot.collectedAt)}`
-            : "这台设备的系统与硬件配置。"}
-        </CardDescription>
         <CardAction>
           <Button
             type="button"
             variant="outline"
             size="sm"
-            disabled={state.refreshing}
+            disabled={busy}
             onClick={() => void state.refresh()}
           >
-            {state.refreshing ? "刷新中…" : state.error ? "重试" : "刷新"}
+            {busy ? pendingLabel : state.error ? "重试" : "刷新"}
           </Button>
         </CardAction>
       </CardHeader>
-      <CardContent className="flex flex-col gap-4">
+      <CardContent className="@container flex flex-col gap-4">
         {state.error && (
           <Alert variant="destructive">
             <AlertDescription>
@@ -84,14 +80,14 @@ export function SystemInfoCard() {
         )}
         {(state.snapshot || loading) && (
           <ItemGroup
-            className="grid sm:grid-cols-3"
+            className="grid @xs:grid-cols-2 @lg:grid-cols-3"
             aria-label={loading ? "正在读取系统信息" : "系统信息"}
             aria-live="polite"
-            aria-busy={state.refreshing}
+            aria-busy={busy}
           >
             {items.map(({ label, value }) => (
-              <Item key={label} className="p-0" role="listitem">
-                <ItemContent>
+              <Item key={label} className="min-w-0 p-0" role="listitem">
+                <ItemContent className="min-w-0">
                   <ItemDescription>{label}</ItemDescription>
                   <ItemTitle title={value || undefined}>
                     {loading ? (

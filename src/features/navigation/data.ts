@@ -2,6 +2,7 @@ import {
   GalleryVerticalEndIcon,
   LayoutDashboardIcon,
   Settings2Icon,
+  WrenchIcon,
 } from "lucide-react";
 
 import { appRoutes } from "@/app-routes";
@@ -23,6 +24,11 @@ export const navigationData = {
       title: appRoutes["/"].title,
       icon: LayoutDashboardIcon,
       url: "/",
+    },
+    {
+      title: appRoutes["/tools"].title,
+      icon: WrenchIcon,
+      url: "/tools",
     },
     {
       title: appRoutes["/settings"].title,

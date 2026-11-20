@@ -4,10 +4,23 @@ import { bind } from "mygo-runtime";
 
 // ---- Types ----
 
-/** GPUInfo describes a graphics processor. CoreCount is null when unavailable. */
+/** EnvironmentInfo describes the user's home directory and account shell. */
+export interface EnvironmentInfo {
+  loginShell: string;
+  homeDir: string;
+}
+
+/** GPUInfo identifies a graphics processor by its reported model. */
 export interface GPUInfo {
   model: string;
-  coreCount: number | null;
+}
+
+/** HomebrewDetection reports availability and the executable used for detection. */
+export interface HomebrewDetection {
+  status: string;
+  path: string;
+  version: string;
+  message: string;
 }
 
 /** ManualConfig identifies the server shared by HTTP and SOCKS5 proxies. */
@@ -35,17 +48,11 @@ export interface SystemInfo {
   os: string;
   osName: string;
   osVersion: string;
-  hostname: string;
   arch: string;
-  goVersion: string;
   cpuModel: string;
   gpus: GPUInfo[];
-  physicalCores: number | null;
-  logicalCores: number | null;
   memoryTotalBytes: number | null;
-  memoryAvailableBytes: number | null;
   diskTotalBytes: number | null;
-  uptimeSeconds: number | null;
 }
 
 /** SystemProxyInfo describes system settings and the routes used for example.com. */
@@ -67,16 +74,21 @@ export interface SystemSnapshot {
 /** Service coordinates system information collection and snapshot persistence. */
 export const SystemService = {
   /**
-   * GetSnapshot reads the last saved snapshot without collecting new information.
+   * GetSnapshot returns the latest in-memory or saved snapshot.
    * It returns null when no compatible snapshot exists.
    */
   getSnapshot: bind<[], SystemSnapshot | null>("SystemService.GetSnapshot", () => []),
   /**
-   * Refresh collects fresh information within five seconds and returns it.
-   * Snapshot persistence is best effort: a storage failure is logged and does not
-   * discard freshly collected information.
+   * Refresh collects fresh information within five seconds and remembers it.
+   * Saving the snapshot to disk is best effort.
    */
   refresh: bind<[], SystemSnapshot>("SystemService.Refresh", () => []),
+} as const;
+
+/** Service exposes read-only information about the app's runtime environment. */
+export const EnvironmentService = {
+  /** Get reads the environment and the system account's login shell. */
+  get: bind<[], EnvironmentInfo>("EnvironmentService.Get", () => []),
 } as const;
 
 /** Service owns the proxy configuration and exposes the settings operations. */
@@ -91,4 +103,10 @@ export const ProxyService = {
   reset: bind<[], Settings>("ProxyService.Reset", () => []),
   /** Save validates and persists settings before making them effective. */
   save: bind<[Settings], Settings>("ProxyService.Save", (input: Settings) => [input]),
+} as const;
+
+/** Service exposes local developer tool detection. */
+export const DevToolsService = {
+  /** DetectHomebrew looks up Homebrew and reads its version on macOS. */
+  detectHomebrew: bind<[], HomebrewDetection>("DevToolsService.DetectHomebrew", () => []),
 } as const;
