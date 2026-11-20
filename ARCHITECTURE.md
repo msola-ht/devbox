@@ -2,7 +2,7 @@
 
 Devbox 使用 MyGo 承载 React 界面和 Go 本机服务。前端负责展示与交互，Go 负责系统访问、业务编排和业务数据持久化，双方通过自动生成的类型化接口通信。
 
-开发与验证遵循 [项目规则](AGENTS.md)。目录入口见 [前端索引](src/index.md) 和 [后端索引](internal/index.md)。各目录的 `index.md` 记录职责及直属文件、子目录入口，通信与行为契约集中在本文。
+开发与验证遵循 [项目规则](AGENTS.md)，产品目标和待实现功能见 [产品设计](DESIGN.md)及[全局代理模块设计](PROXY_DESIGN.md)。目录入口见 [前端索引](src/index.md) 和 [后端索引](internal/index.md)。各目录的 `index.md` 记录职责及直属文件、子目录入口，通信与行为契约集中在本文。
 
 ## 入口与职责
 
@@ -10,14 +10,17 @@ Devbox 使用 MyGo 承载 React 界面和 Go 本机服务。前端负责展示�
 | --- | --- |
 | [main.go](main.go) | 注册 Go 服务、创建窗口、启动 MyGo 应用 |
 | [mygo.config.ts](mygo.config.ts) | 配置前端开发地址、构建命令、产物和接口生成路径 |
-| [src/main.tsx](src/main.tsx) | 恢复上次路由，挂载 React、StrictMode 和 HashRouter |
+| [src/main.tsx](src/main.tsx) | 恢复上次路由，挂载 React、StrictMode、HashRouter 和浮动提示 |
 | [src/app.tsx](src/app.tsx) | 将合法路由映射为页面，组合应用外壳、导航和页面 |
 | [src/app-routes.ts](src/app-routes.ts) | 定义路由及标题，校验路径，保存与恢复上次页面 |
 | [src/features](src/features/index.md) | 按业务组织页面、组件、Hook 和业务内工具 |
+| [src/features/settings](src/features/settings/index.md) | 代理设置、配置恢复和连接检查 |
 | [src/components/ui](src/components/ui/index.md) | shadcn 基础组件，由业务组件组合使用 |
 | [src/lib](src/lib/index.md) | 已被复用的通用前端工具 |
 | [src/mygo.ts](src/mygo.ts) | MyGo 生成的 TypeScript 类型与服务调用入口 |
 | [internal/systeminfo](internal/systeminfo/index.md) | 当前的系统信息业务，包括采集、快照存储与服务编排 |
+| [internal/proxy](internal/proxy/index.md) | 代理配置、路由解析和连接检查 |
+| [internal/configfile](internal/configfile/index.md) | 配置文件定位和 JSON 写入 |
 
 应用外壳通过属性接收侧栏、面包屑和页面内容。页面组合业务组件；导航组织入口与路由信息。新增业务沿用 `src/features/<业务>` 和 `internal/<业务>` 的组织方式。
 
@@ -30,24 +33,27 @@ flowchart TD
     View --> Hook[业务 Hook]
     Hook --> Client[MyGo 生成接口]
     Client --> Service[Go Service]
-    Service --> Collector[系统采集]
-    Service --> Store[快照存储]
-    Service --> Model[数据模型]
-    Collector --> Model
-    Store --> Model
+    Service --> System[系统信息]
+    Service --> Proxy[代理设置]
+    System --> Collector[系统采集]
+    System --> Snapshot[快照存储]
+    Proxy --> Network[路由解析与连接检查]
+    Proxy --> Settings[代理配置存储]
+    Snapshot --> ConfigFile[配置文件定位与 JSON 写入]
+    Settings --> ConfigFile
 ```
 
 - 页面与业务组件负责展示和用户操作；加载、刷新、取消和请求结果协调集中在业务 Hook。
 - Go Service 组合具体采集与存储能力，负责业务顺序、超时和错误处理。被绑定服务的导出方法属于前端可调用契约。
 - 采集模块负责系统接口与平台命令，存储模块负责文件格式与读写，二者通过数据模型协作。
-- 基础 UI 与通用工具保持独立，供业务模块单向调用。业务内的格式化和请求逻辑位于所属业务目录。
+- 业务界面通过 shadcn 组件和内置变体组合。业务内的格式化和请求逻辑位于所属业务目录。
 - 当前采用具体函数组合。公共模块与接口的提取以实际复用、替换实现或依赖解耦需求为依据。
 
 ## 通信与执行方式
 
 ### 当前通信入口
 
-Go 在 `main.go` 中通过 `mygo.BindAs("SystemService", systeminfo.Service{})` 注册系统信息服务。前端通过 `src/mygo.ts` 中的 `SystemService` 调用，业务组件通过 Hook 使用它。
+Go 在 `main.go` 中注册系统信息服务 `SystemService` 和代理设置服务 `ProxyService`。前端通过 `src/mygo.ts` 中生成的服务调用，业务组件通过 Hook 使用它们。
 
 `src/mygo.ts` 是生成产物，类型与方法签名以 Go 定义为源。修改 Go 对外契约后运行 `bun run generate`，同步调整调用方并检查类型。前端共用生成类型与调用入口。
 
@@ -73,10 +79,10 @@ MyGo 接口生成会执行应用入口直到 `App.Run`。入口中保持服务�
 ### 取消、错误与并发
 
 - 前端请求使用 `AbortController`。开始新刷新或组件卸载时取消旧请求；仅当前有效请求的结果更新界面。
-- Go 耗时调用接收 `context.Context`，继续传给系统接口和外部命令。系统信息 Service 设置五秒采集超时。
+- Go 耗时调用接收 `context.Context`，并传给支持取消的系统接口、外部命令和网络操作。系统信息 Service 设置五秒采集超时。
 - Go 返回的错误使前端 Promise 拒绝。Hook 将其转换为界面状态，组件展示提示并提供重试；取消的请求保持安静。
-- 多个 MyGo 调用可以同时执行。当前 Service 无共享可变内存状态，每次刷新各自采集；文件使用临时文件写入后替换，后一次成功替换决定磁盘快照内容。
-- 后续加入共享状态时，由拥有该状态的 Go 模块负责并发协调。需要跨页面持续运行的任务采用上表中的任务生命周期。
+- 多个 MyGo 调用可以同时执行。系统信息 Service 无共享可变内存状态，每次刷新各自采集；文件使用临时文件写入后替换，后一次成功替换决定磁盘快照内容。
+- `ProxyService` 持有代理配置，用互斥锁协调读取、保存与恢复。连接检查使用每次调用传入的表单草稿。
 
 ## 状态与持久化归属
 
@@ -84,6 +90,8 @@ MyGo 接口生成会执行应用入口直到 `App.Run`。入口中保持服务�
 | --- | --- |
 | 系统信息 | 本机采集为数据来源，Go 文件快照保存上次结果 |
 | 当前展示的快照、刷新中和错误 | 业务 Hook 的 React 内存状态 |
+| 代理设置 | `ProxyService` 和 `os.UserConfigDir()/devbox/proxy.json` |
+| 代理表单草稿和连接检查状态 | 设置页面的 React 内存状态 |
 | 主题、侧栏展开状态、上次页面 | 前端 `localStorage`，分别由主题、外壳和路由模块管理 |
 
 业务数据的存储格式、兼容性和采集策略由 Go 管理。前端本地存储用于界面偏好。主题在 [index.html](index.html) 中先恢复，再由主题模块切换；调整主题存储约定时需要同时核对这两个入口。
@@ -116,7 +124,7 @@ MyGo 接口生成会执行应用入口直到 `App.Run`。入口中保持服务�
 
 1. 页面挂载后调用 `getSnapshot()`，有快照时先展示。
 2. 读取结束后调用 `refresh()`，更新显示内容和采集时间。快照读取失败记录警告，仍继续采集。
-3. 刷新过程中保留已有数据，禁用刷新按钮；首次没有数据时展示 Skeleton。
+3. 刷新过程中保留已有数据，禁用刷新按钮。首次没有数据时在原位置显示 Skeleton。
 4. 刷新失败时保留已有快照并提示；首次加载失败时展示错误。用户可通过按钮重试。
 5. 开始新刷新或离开页面时取消当前请求。
 
@@ -126,7 +134,27 @@ MyGo 接口生成会执行应用入口直到 `App.Run`。入口中保持服务�
 
 文件位置为 `os.UserConfigDir()/devbox/system-info.json`，macOS 对应 `~/Library/Application Support/devbox/system-info.json`。
 
-当前文件格式版本为 `2`，包含 `version`、`info` 和 `collectedAt`。读取时校验版本、采集时间非零、操作系统和架构；旧格式或不兼容快照会在下次成功采集并写入后被替换。写入使用同目录临时文件，完成编码和关闭后再替换目标文件。
+当前文件格式版本为 `2`，包含 `version`、`info` 和 `collectedAt`。读取时校验版本、采集时间非零、操作系统和架构。旧格式或不兼容快照会在下次成功采集并写入后被替换。快照和代理设置通过 `configfile` 定位文件并写入同目录临时文件，完成编码和关闭后再替换目标文件。
+
+## 代理设置
+
+设置页通过 [use-proxy-settings.ts](src/features/settings/use-proxy-settings.ts) 管理表单，使用 [proxy-settings-card.tsx](src/features/settings/proxy-settings-card.tsx) 展示代理模式。默认系统代理；手动模式选择 `127.0.0.1:7890`、`127.0.0.1:7897` 或自定义主机与端口，HTTP 和 SOCKS5 使用同一个地址。代理地址不包含认证信息。
+
+保存、恢复和连接检查通过浮动提示报告结果。系统代理信息刷新期间保留上次读取结果。系统配置和访问 `example.com` 的实际路由在同一个三列网格中展示。macOS 上与系统配置一致的路由合并展示，有自动配置时单独列出实际路由。其他平台展示实际路由。
+
+| 前端调用 | 行为 |
+| --- | --- |
+| `ProxyService.get()` | 返回已保存设置。文件缺失时返回默认值，文件内容无效或版本不兼容时返回 `null`，其他读取错误拒绝 |
+| `ProxyService.getSystemInfo()` | 读取系统配置和示例地址的实际路由。取消可终止 macOS 配置查询，正在进行的 MyGo 平台解析会继续到返回 |
+| `ProxyService.save(settings)` | 验证并保存设置，成功后更新服务状态。非手动模式保留上次的手动地址 |
+| `ProxyService.reset()` | 用系统模式和 `127.0.0.1:7890` 替换设置文件，成功后返回默认设置 |
+| `ProxyService.check(settings)` | 用草稿对 `https://example.com/` 发起 HEAD 请求，成功时返回 `void`。请求使用十秒截止时间，可取消手动探测和网络请求。已开始的系统代理解析会继续到返回 |
+
+代理配置保存在 `os.UserConfigDir()/devbox/proxy.json`，当前格式版本为 `1`。设置页识别无效文件后提供恢复默认设置操作。保存或恢复失败时保留当前配置。服务首次读取或保存时加载配置，服务注册和接口生成期间无需读取。
+
+连接检查是当前唯一的代理网络操作。手动代理客户端首次请求通过 SOCKS5 握手识别所选地址，未识别到无认证 SOCKS5 时使用 HTTP，探测结果由客户端复用。系统和手动模式都绕过本机回环地址。连接检查在 HTTP `CONNECT` 阶段识别代理认证错误。
+
+实际路由展示和连接检查共用系统代理解析。启动环境中的 `HTTP_PROXY`、`HTTPS_PROXY` 各自优先，`ALL_PROXY` 填补缺少的协议配置，`NO_PROXY` 指定绕过范围。存在这些变量时使用环境规则，否则交由 MyGo 的 `netproxy.Proxy` 按平台解析。MyGo 按协议和主机缓存结果五秒，解析没有可用结果时直连，其接口无法区分未配置与解析失败。macOS 系统配置使用 `scutil --proxy` 读取。外部进程的代理适配见[代理设计](PROXY_DESIGN.md)。
 
 ## 修改与验证
 

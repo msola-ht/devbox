@@ -10,10 +10,12 @@
 
 ## UI
 
-- UI 实现默认优先使用 shadcn/ui。
-- 新增或修改界面前，先检查已安装的 shadcn 组件和 `components.json`；需要新组件时使用 `bunx --bun shadcn@latest add <component>`。
-- 只有 shadcn 中没有合适组件或需求明确不适用时，才编写自定义 UI。
-- 如果需要编写自定义 UI，必须先取得用户的明确许可；未获许可前不得开始实现。
+- 优先用已有的 shadcn/ui 组件组合界面，沿用组件的默认外观及 `variant`、`size`、`orientation` 等内置属性。
+- 新增或修改界面前，先检查已安装的 shadcn 组件和 `components.json`。需要新组件时使用 `bunx --bun shadcn@latest add <component>`。
+- 局部排布优先用组件组合和内置布局属性实现，可使用 Tailwind CSS 的 Flexbox 和 Grid 布局工具类，例如 `flex`、`grid`、`grid-cols-3`、`gap-*` 和 `items-*`，表达列数、间距、对齐、尺寸和响应式行为。
+- 组件规范化、重构和功能修复以现有界面为基准，保留侧栏区域及展开与折叠尺寸、页头和分割线、内容区留白、卡片结构和控件位置。只有用户明确要求时才调整全局布局或增删界面区域。
+- 修改前核对受影响的界面结构和布局，修改后对照组件组合、尺寸与位置，按本文件的验证规则检查。
+- 仅在 shadcn/ui 缺少合适组件或明确不适用时考虑自定义 UI，实施前须取得用户的明确许可。
 
 ## 验证
 

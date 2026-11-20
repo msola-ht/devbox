@@ -5,6 +5,7 @@ go 1.27.4
 require (
 	github.com/egoist/mygo v0.10.0
 	github.com/shirou/gopsutil/v4 v4.26.10
+	golang.org/x/net v0.59.0
 )
 
 require (
@@ -15,7 +16,6 @@ require (
 	github.com/tklauser/go-sysconf v0.4.0 // indirect
 	github.com/tklauser/numcpus v0.12.0 // indirect
 	github.com/yusufpapurcu/wmi v1.2.4 // indirect
-	golang.org/x/net v0.59.0 // indirect
 	golang.org/x/sys v0.48.0 // indirect
 	golang.org/x/text v0.43.0 // indirect
 )

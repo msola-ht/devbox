@@ -2,7 +2,7 @@
 
 React 界面入口、路由和全局样式。业务通过 MyGo 生成接口调用 Go 服务。
 
-- [main.tsx](main.tsx)：恢复路由，挂载 React 和 HashRouter。
+- [main.tsx](main.tsx)：恢复路由，挂载 React、HashRouter 和浮动提示。
 - [app.tsx](app.tsx)：组合应用外壳、导航和页面。
 - [app-routes.ts](app-routes.ts)：路由定义、路径校验和页面记忆。
 - [mygo.ts](mygo.ts)：由 Go 定义生成的服务接口和数据类型。

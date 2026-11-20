@@ -38,7 +38,7 @@ export function AppShell({ sidebar, breadcrumb, children }: AppShellProps) {
               <SidebarTrigger className="-ml-1" />
               <Separator
                 orientation="vertical"
-                className="mr-2 h-4 w-px self-center bg-border"
+                className="mr-2 h-4 data-vertical:self-center"
               />
               {breadcrumb}
               <div className="ml-auto">

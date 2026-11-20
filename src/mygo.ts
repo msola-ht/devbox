@@ -10,6 +10,23 @@ export interface GPUInfo {
   coreCount: number | null;
 }
 
+/** ManualConfig identifies the server shared by HTTP and SOCKS5 proxies. */
+export interface ManualConfig {
+  address: string;
+}
+
+/** Settings contains the effective mode and the last manual proxy. */
+export interface Settings {
+  mode: string;
+  manual: ManualConfig;
+}
+
+/** SystemEntry is one enabled system proxy setting. */
+export interface SystemEntry {
+  name: string;
+  address: string;
+}
+
 /**
  * SystemInfo describes the machine running the app.
  * Numeric measurements are null when unavailable.
@@ -29,6 +46,14 @@ export interface SystemInfo {
   memoryAvailableBytes: number | null;
   diskTotalBytes: number | null;
   uptimeSeconds: number | null;
+}
+
+/** SystemProxyInfo describes system settings and the routes used for example.com. */
+export interface SystemProxyInfo {
+  settingsAvailable: boolean;
+  settings: SystemEntry[];
+  http: string;
+  https: string;
 }
 
 /** SystemSnapshot contains system information and the time collection completed. */
@@ -52,4 +77,18 @@ export const SystemService = {
    * discard freshly collected information.
    */
   refresh: bind<[], SystemSnapshot>("SystemService.Refresh", () => []),
+} as const;
+
+/** Service owns the proxy configuration and exposes the settings operations. */
+export const ProxyService = {
+  /** Check checks a draft without saving it. */
+  check: bind<[Settings], void>("ProxyService.Check", (input: Settings) => [input]),
+  /** Get returns the current settings, or null if the file needs to be reset. */
+  get: bind<[], Settings | null>("ProxyService.Get", () => []),
+  /** GetSystemInfo returns the system proxy settings and current routes. */
+  getSystemInfo: bind<[], SystemProxyInfo>("ProxyService.GetSystemInfo", () => []),
+  /** Reset replaces the saved settings with the defaults. */
+  reset: bind<[], Settings>("ProxyService.Reset", () => []),
+  /** Save validates and persists settings before making them effective. */
+  save: bind<[Settings], Settings>("ProxyService.Save", (input: Settings) => [input]),
 } as const;
