@@ -8,6 +8,7 @@
 - [button.tsx](button.tsx)：按钮与尺寸、样式变体。
 - [card.tsx](card.tsx)：卡片及标题、描述、操作区和内容区。
 - [collapsible.tsx](collapsible.tsx)：可折叠内容。
+- [dialog.tsx](dialog.tsx)：模态弹窗及标题、描述和操作区。
 - [dropdown-menu.tsx](dropdown-menu.tsx)：下拉菜单。
 - [empty.tsx](empty.tsx)：空状态。
 - [field.tsx](field.tsx)：表单字段和分组。

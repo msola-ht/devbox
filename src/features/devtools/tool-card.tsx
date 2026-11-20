@@ -1,6 +1,7 @@
+import { RefreshCwIcon } from "lucide-react";
 import type { Cancellable } from "mygo-runtime";
 
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -10,78 +11,102 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { Item, ItemContent, ItemTitle } from "@/components/ui/item";
+import { Spinner } from "@/components/ui/spinner";
 import {
-  Item,
-  ItemContent,
-  ItemDescription,
-  ItemTitle,
-} from "@/components/ui/item";
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 
-import type { ToolDetection, ToolStatus } from "@/mygo";
+import type { ToolDetection } from "@/mygo";
 
+import { ToolResult, ToolResultsDialog } from "./tool-results";
 import { useToolDetection } from "./use-tool-detection";
-
-const statusLabels: Record<ToolStatus, string> = {
-  available: "可用",
-  not_found: "当前环境未找到",
-  unsupported: "当前平台不适用",
-  failed: "检测失败",
-};
 
 interface ToolCardProps {
   name: string;
   description: string;
-  detect: Cancellable<[], ToolDetection>;
+  detect: Cancellable<[], ToolDetection[]>;
 }
 
 export function ToolCard({ name, description, detect }: ToolCardProps) {
-  const { state, refresh } = useToolDetection(detect);
-  const result = typeof state === "string" ? undefined : state;
-  const status = state === "request_failed" ? "failed" : result?.status;
-  const label = status ? statusLabels[status] : "检测中…";
-  const title =
-    result?.status === "available" ? `${label} · ${result.version}` : label;
-  const message =
-    state === "request_failed" ? "暂时无法读取检测结果，请重试。" : result?.message;
-  const action = status === "failed" ? "重试" : "刷新";
+  const { results, status, refresh } = useToolDetection(detect);
+  const detecting = status === "detecting";
+  const requestFailed = status === "request_failed";
+  const allFailed =
+    results.length > 0 && results.every(({ status }) => status === "failed");
+  const action = requestFailed || allFailed ? "重试" : "刷新";
+  const refreshLabel = detecting ? `正在检测 ${name}` : `${action} ${name} 检测`;
+  const summary =
+    results.find(({ status }) => status === "available") ?? results[0];
+  const version = summary?.status === "available" ? summary.version : "";
+  const shortVersion = version.replace(/\s+\([^()]*\)$/, "");
 
   return (
     <Card>
       <CardHeader>
-        <CardTitle>{name}</CardTitle>
-        <CardDescription>{description}</CardDescription>
-        {status !== "unsupported" && (
-          <CardAction>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              aria-label={`${action} ${name} 检测`}
-              disabled={state === "detecting"}
-              onClick={() => void refresh()}
-            >
-              {action}
-            </Button>
+        <CardTitle
+          className="flex flex-wrap items-baseline gap-x-1.5 wrap-anywhere"
+          aria-live="polite"
+        >
+          <span>{name}</span>
+          {shortVersion !== version ? (
+            <Tooltip>
+              <TooltipTrigger render={<span tabIndex={0} />}>
+                {shortVersion}
+              </TooltipTrigger>
+              <TooltipContent className="wrap-anywhere">{version}</TooltipContent>
+            </Tooltip>
+          ) : (
+            shortVersion
+          )}
+        </CardTitle>
+        <CardDescription className="wrap-anywhere">{description}</CardDescription>
+        {summary?.status !== "unsupported" && (
+          <CardAction className="flex items-center gap-1">
+            {results.length > 1 && (
+              <ToolResultsDialog name={name} results={results} />
+            )}
+            <Tooltip>
+              <TooltipTrigger
+                render={
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="icon-sm"
+                    aria-label={refreshLabel}
+                    disabled={detecting}
+                    onClick={() => void refresh()}
+                  />
+                }
+              >
+                {detecting ? <Spinner aria-hidden /> : <RefreshCwIcon aria-hidden />}
+              </TooltipTrigger>
+              <TooltipContent>{refreshLabel}</TooltipContent>
+            </Tooltip>
           </CardAction>
         )}
       </CardHeader>
-      <CardContent>
-        {status === "failed" ? (
+      <CardContent
+        className="flex flex-col gap-2"
+        aria-live="polite"
+        aria-busy={detecting}
+      >
+        {requestFailed && (
           <Alert variant="destructive">
-            <AlertTitle>{title}</AlertTitle>
-            <AlertDescription className="wrap-anywhere">
-              <div>{message}</div>
-              {result?.path && <code>{result.path}</code>}
+            <AlertDescription>
+              {summary
+                ? "刷新失败，当前显示上次检测结果。"
+                : "暂时无法读取检测结果，请重试。"}
             </AlertDescription>
           </Alert>
-        ) : (
-          <Item className="p-0" role="status">
-            <ItemContent className="min-w-0">
-              <ItemTitle>{title}</ItemTitle>
-              {message && <ItemDescription>{message}</ItemDescription>}
-              {result?.path && (
-                <code className="wrap-anywhere">{result.path}</code>
-              )}
+        )}
+        {summary && <ToolResult result={summary} compact />}
+        {detecting && !summary && (
+          <Item className="p-0">
+            <ItemContent>
+              <ItemTitle>检测中…</ItemTitle>
             </ItemContent>
           </Item>
         )}

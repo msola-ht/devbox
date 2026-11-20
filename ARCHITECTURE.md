@@ -161,21 +161,25 @@ MyGo 接口生成会执行应用入口直到 `App.Run`。入口中保持服务�
 
 “开发工具”页面位于 `/tools`。Git、uv、Python 和 Homebrew 共用[检测卡片](src/features/devtools/tool-card.tsx)和 [use-tool-detection.ts](src/features/devtools/use-tool-detection.ts)，分别调用 `DevToolsService.detectGit()`、`detectUV()`、`detectPython()` 和 `detectHomebrew()`。进入页面时分别检测，用户可以单独刷新。开始同一工具的新请求或离开页面时取消旧请求，已取消的请求不会更新页面。
 
-Go 在 [devtools](internal/devtools/index.md) 内共用 `ToolDetection`、应用进程的 `PATH` 查找和命令执行。工具各自决定入口和版本读取方式。每条命令的截止时间为五秒。取消时，Unix 终止命令所在的进程组，Windows 终止命令所在的 Job Object。Windows 后台命令使用无控制台窗口模式。成功结果中的路径来自实际执行的入口或解释器。
+Go 在 [devtools](internal/devtools/index.md) 内共用 `ToolDetection`、应用进程的 `PATH` 查找和命令执行。[发现与编排](internal/devtools/discovery.go) 按 `PATH` 顺序收集绝对目录中的入口，再加入工具特有的路径。每项检测最多并行探测四个入口，按发现顺序返回 `ToolDetection[]`。单个入口的失败随结果返回。相同入口只探测一次，指向同一实际路径且版本相同的 Git、uv 和 Homebrew 成功结果只显示首次命中的一条，Python 按探测返回的解释器路径区分环境。
+
+卡片在工具名称旁显示首个可用结果的版本号，内容区域显示路径，全部不可用时显示首条结果。版本末尾的括号附注通过悬浮提示和安装详情查看。有多条检测结果时，刷新图标旁显示结果数量。点击数字打开弹窗，按检测顺序查看完整版本、路径和失败原因。
+
+每条命令的截止时间为五秒。取消时，Unix 终止命令所在的进程组，Windows 终止命令所在的 Job Object。Windows 后台命令使用无控制台窗口模式。成功结果中的路径来自实际执行的入口或解释器。
 
 - [Git](internal/devtools/git.go) 使用 `PATH` 中的绝对入口。在 macOS 上，入口解析为 `/usr/bin/git` 时，通过 `xcode-select --print-path` 查找当前开发工具目录，直接执行其中的 `usr/bin/git`，避免触发安装提示。
 - [uv](internal/devtools/uv.go) 使用 `PATH` 中的绝对入口并执行 `uv --version`。
 - [Python](internal/devtools/python.go) 在 macOS 和 Linux 上查找 `python3`，在 Windows 上查找 `python.exe`。macOS 的 `/usr/bin/python3` 与 Git 共用 Apple 开发工具目录查询。Windows 的应用执行别名通过 `pymanager.exe list --one --format=json` 查询已安装解释器。探测子进程在隔离模式中读取 Python 3 版本和 `sys.executable`，Windows 探测为子进程关闭安装管理器的自动安装选项。
-- [Homebrew](internal/devtools/homebrew.go) 在 macOS 上检测。通过 `PATH` 未解析到可用绝对入口时，按应用进程架构查找 `/opt/homebrew/bin/brew` 和 `/usr/local/bin/brew`。
+- [Homebrew](internal/devtools/homebrew.go) 在 macOS 上检测。`PATH` 入口之后，按应用进程架构检查 `/opt/homebrew/bin/brew` 和 `/usr/local/bin/brew`。
 
 | `status` | 含义 |
 | --- | --- |
 | `available` | 命令成功并返回可识别的版本，包含 `path` 和 `version` |
-| `not_found` | 在该工具的查找范围内未找到入口，包含 `message` |
+| `not_found` | 在查找范围内未找到入口，或从已知的 Python 启动别名未找到已安装解释器，包含 `message` |
 | `failed` | 入口无法使用、命令执行失败或超时、版本格式未识别，包含 `message` 及已知的 `path` |
 | `unsupported` | 当前平台不适用该项检测，包含 `message` |
 
-业务状态随普通响应返回。调用取消通过 MyGo 结束请求，检测结果仅保存在当前页面。一次请求失败只影响对应卡片。
+未找到入口或平台不适用时，数组包含一条对应状态。调用取消通过 MyGo 结束请求，检测结果仅保存在当前页面。刷新期间显示上次结果，收到新结果后更新卡片。请求失败时保留上次结果并提示重试。一次请求失败只影响对应卡片。
 
 ## 代理设置
 

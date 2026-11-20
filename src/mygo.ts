@@ -121,12 +121,12 @@ export const ProxyService = {
 
 /** Service exposes local developer tool detection. */
 export const DevToolsService = {
-  /** DetectGit checks the Git executable found in the app's PATH. */
-  detectGit: bind<[], ToolDetection>("DevToolsService.DetectGit", () => []),
-  /** DetectHomebrew looks up Homebrew and reads its version on macOS. */
-  detectHomebrew: bind<[], ToolDetection>("DevToolsService.DetectHomebrew", () => []),
-  /** DetectPython reports the Python 3 interpreter selected by the app environment. */
-  detectPython: bind<[], ToolDetection>("DevToolsService.DetectPython", () => []),
-  /** DetectUV checks the uv executable found in the app's PATH. */
-  detectUV: bind<[], ToolDetection>("DevToolsService.DetectUV", () => []),
+  /** DetectGit checks the Git executables found in the app's PATH. */
+  detectGit: bind<[], ToolDetection[]>("DevToolsService.DetectGit", () => []),
+  /** DetectHomebrew checks Homebrew installations on macOS. */
+  detectHomebrew: bind<[], ToolDetection[]>("DevToolsService.DetectHomebrew", () => []),
+  /** DetectPython reports the Python 3 interpreters found in the app's PATH. */
+  detectPython: bind<[], ToolDetection[]>("DevToolsService.DetectPython", () => []),
+  /** DetectUV checks the uv executables found in the app's PATH. */
+  detectUV: bind<[], ToolDetection[]>("DevToolsService.DetectUV", () => []),
 } as const;

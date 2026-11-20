@@ -32,17 +32,8 @@ type ToolDetection struct {
 	Path    string     `json:"path"`
 	Version string     `json:"version"`
 	Message string     `json:"message"`
-}
 
-func findInPath(name string) (string, error) {
-	path, err := exec.LookPath(name)
-	if errors.Is(err, exec.ErrNotFound) {
-		return "", nil
-	}
-	if err == nil && !filepath.IsAbs(path) {
-		return path, exec.ErrDot
-	}
-	return path, err
+	resolvedPath string
 }
 
 func pathFailure(path string, err error) ToolDetection {
@@ -53,13 +44,10 @@ func pathFailure(path string, err error) ToolDetection {
 	return ToolDetection{Status: statusFailed, Path: path, Message: message}
 }
 
-func detectVersion(ctx context.Context, path, prefix string) (ToolDetection, error) {
+func detectVersion(ctx context.Context, path, prefix string) ToolDetection {
 	output, err := runCommand(ctx, path, []string{"--version"})
-	if err := ctx.Err(); err != nil {
-		return ToolDetection{}, err
-	}
 	if err != nil {
-		return versionFailure(path, err), nil
+		return versionFailure(path, err)
 	}
 
 	firstLine, _, _ := strings.Cut(strings.TrimSpace(string(output)), "\n")
@@ -70,9 +58,10 @@ func detectVersion(ctx context.Context, path, prefix string) (ToolDetection, err
 			Status:  statusFailed,
 			Path:    path,
 			Message: "命令未返回可识别的版本。",
-		}, nil
+		}
 	}
-	return ToolDetection{Status: statusAvailable, Path: path, Version: version}, nil
+	resolvedPath, _ := filepath.EvalSymlinks(path)
+	return ToolDetection{Status: statusAvailable, Path: path, Version: version, resolvedPath: resolvedPath}
 }
 
 func versionFailure(path string, err error) ToolDetection {
