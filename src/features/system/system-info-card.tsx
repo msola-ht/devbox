@@ -1,6 +1,8 @@
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Button } from "@/components/ui/button";
 import {
   Card,
+  CardAction,
   CardContent,
   CardDescription,
   CardHeader,
@@ -14,13 +16,13 @@ import {
   ItemTitle,
 } from "@/components/ui/item";
 import { Skeleton } from "@/components/ui/skeleton";
-import { formatBytes } from "@/features/system/formatters";
+import { formatBytes, formatCollectedAt } from "@/features/system/formatters";
 import { useSystemInfo } from "@/features/system/use-system-info";
 
 export function SystemInfoCard() {
   const state = useSystemInfo();
-  const systemInfo = state.status === "ready" ? state.data : null;
-  const loading = state.status === "loading";
+  const systemInfo = state.snapshot?.info;
+  const loading = !state.snapshot && state.refreshing;
 
   const isAppleSilicon =
     systemInfo?.os === "darwin" && systemInfo.cpuModel.startsWith("Apple ");
@@ -53,19 +55,39 @@ export function SystemInfoCard() {
     <Card>
       <CardHeader>
         <CardTitle>系统信息</CardTitle>
-        <CardDescription>这台设备的系统与硬件配置。</CardDescription>
+        <CardDescription aria-live="polite">
+          {state.snapshot
+            ? `采集于 ${formatCollectedAt(state.snapshot.collectedAt)}`
+            : "这台设备的系统与硬件配置。"}
+        </CardDescription>
+        <CardAction>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            disabled={state.refreshing}
+            onClick={() => void state.refresh()}
+          >
+            {state.refreshing ? "刷新中…" : state.error ? "重试" : "刷新"}
+          </Button>
+        </CardAction>
       </CardHeader>
-      <CardContent>
-        {state.status === "error" ? (
+      <CardContent className="flex flex-col gap-4">
+        {state.error && (
           <Alert variant="destructive">
-            <AlertDescription>暂时无法读取系统信息。</AlertDescription>
+            <AlertDescription>
+              {state.snapshot
+                ? "刷新失败，当前显示上次采集的信息。"
+                : state.error}
+            </AlertDescription>
           </Alert>
-        ) : (
+        )}
+        {(state.snapshot || loading) && (
           <ItemGroup
             className="grid sm:grid-cols-3"
             aria-label={loading ? "正在读取系统信息" : "系统信息"}
             aria-live="polite"
-            aria-busy={loading}
+            aria-busy={state.refreshing}
           >
             {items.map(({ label, value }) => (
               <Item key={label} className="p-0" role="listitem">

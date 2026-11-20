@@ -10,7 +10,10 @@ export interface GPUInfo {
   coreCount: number | null;
 }
 
-/** SystemInfo describes the machine running the app. */
+/**
+ * SystemInfo describes the machine running the app.
+ * Numeric measurements are null when unavailable.
+ */
 export interface SystemInfo {
   os: string;
   osName: string;
@@ -28,14 +31,25 @@ export interface SystemInfo {
   uptimeSeconds: number | null;
 }
 
+/** SystemSnapshot contains system information and the time collection completed. */
+export interface SystemSnapshot {
+  info: SystemInfo;
+  collectedAt: string;
+}
+
 // ---- Services ----
 
-/** Service provides information about the machine running the app. */
+/** Service coordinates system information collection and snapshot persistence. */
 export const SystemService = {
   /**
-   * Info returns a snapshot of the host's system, hardware and runtime information.
-   * Numeric measurements are null when unavailable. Disk capacity is the combined
-   * capacity of physical disks, counting each whole disk once.
+   * GetSnapshot reads the last saved snapshot without collecting new information.
+   * It returns null when no compatible snapshot exists.
    */
-  info: bind<[], SystemInfo>("SystemService.Info", () => []),
+  getSnapshot: bind<[], SystemSnapshot | null>("SystemService.GetSnapshot", () => []),
+  /**
+   * Refresh collects fresh information within five seconds and returns it.
+   * Snapshot persistence is best effort: a storage failure is logged and does not
+   * discard freshly collected information.
+   */
+  refresh: bind<[], SystemSnapshot>("SystemService.Refresh", () => []),
 } as const;
