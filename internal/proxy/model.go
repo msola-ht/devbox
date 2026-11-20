@@ -20,18 +20,43 @@ type Settings struct {
 	Manual ManualConfig `json:"manual"`
 }
 
-// SystemEntry is one enabled system proxy setting.
+// SystemProxyKind identifies an enabled OS proxy setting.
+type SystemProxyKind string
+
+const (
+	proxyHTTP          SystemProxyKind = "http"
+	proxyHTTPS         SystemProxyKind = "https"
+	proxySOCKS         SystemProxyKind = "socks"
+	proxyAutoConfig    SystemProxyKind = "auto_config"
+	proxyAutoDiscovery SystemProxyKind = "auto_discovery"
+)
+
 type SystemEntry struct {
-	Name    string `json:"name"`
-	Address string `json:"address"`
+	Kind    SystemProxyKind `json:"kind"`
+	Address string          `json:"address"`
+}
+
+type RouteStatus string
+
+const (
+	routeDirect RouteStatus = "direct"
+	routeProxy  RouteStatus = "proxy"
+	routeError  RouteStatus = "error"
+)
+
+// SystemRoute describes a resolved route without credentials.
+type SystemRoute struct {
+	Status   RouteStatus `json:"status"`
+	Protocol string      `json:"protocol"`
+	Address  string      `json:"address"`
 }
 
 // SystemProxyInfo describes system settings and the routes used for example.com.
 type SystemProxyInfo struct {
 	SettingsAvailable bool          `json:"settingsAvailable"`
 	Settings          []SystemEntry `json:"settings"`
-	HTTP              string        `json:"http"`
-	HTTPS             string        `json:"https"`
+	HTTP              SystemRoute   `json:"http"`
+	HTTPS             SystemRoute   `json:"https"`
 }
 
 var errInvalidMode = errors.New("请选择有效的代理模式。")

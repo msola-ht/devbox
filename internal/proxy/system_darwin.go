@@ -49,26 +49,29 @@ func readSystemSettings(ctx context.Context) ([]SystemEntry, bool, error) {
 		return nil, true, fmt.Errorf("无法解析系统代理。")
 	}
 	entries := make([]SystemEntry, 0, 5)
-	for _, item := range []struct{ name, prefix string }{
-		{"HTTP", "HTTP"},
-		{"HTTPS", "HTTPS"},
-		{"SOCKS", "SOCKS"},
+	for _, item := range []struct {
+		kind   SystemProxyKind
+		prefix string
+	}{
+		{proxyHTTP, "HTTP"},
+		{proxyHTTPS, "HTTPS"},
+		{proxySOCKS, "SOCKS"},
 	} {
 		if values[item.prefix+"Enable"] != "1" {
 			continue
 		}
 		host, port := values[item.prefix+"Proxy"], values[item.prefix+"Port"]
-		address := "地址不可用"
+		var address string
 		if host != "" && port != "" {
 			address = net.JoinHostPort(strings.Trim(host, "[]"), port)
 		}
-		entries = append(entries, SystemEntry{Name: item.name, Address: address})
+		entries = append(entries, SystemEntry{Kind: item.kind, Address: address})
 	}
 	if values["ProxyAutoConfigEnable"] == "1" {
-		entries = append(entries, SystemEntry{Name: "自动配置", Address: "已开启"})
+		entries = append(entries, SystemEntry{Kind: proxyAutoConfig})
 	}
 	if values["ProxyAutoDiscoveryEnable"] == "1" {
-		entries = append(entries, SystemEntry{Name: "自动发现", Address: "已开启"})
+		entries = append(entries, SystemEntry{Kind: proxyAutoDiscovery})
 	}
 	return entries, true, nil
 }

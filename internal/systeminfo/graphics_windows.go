@@ -3,16 +3,12 @@ package systeminfo
 import (
 	"context"
 	"encoding/json"
-	"os/exec"
 	"strings"
-	"syscall"
 )
 
 func graphicsInfo(ctx context.Context) []GPUInfo {
-	const query = `$ErrorActionPreference = 'Stop'; [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false); ConvertTo-Json -Compress -InputObject @(Get-CimInstance -ClassName Win32_VideoController | Select-Object -ExpandProperty Name)`
-	command := exec.CommandContext(ctx, "powershell.exe", "-NoLogo", "-NoProfile", "-NonInteractive", "-Command", query)
-	command.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
-	output, err := command.Output()
+	const query = `Get-CimInstance -ClassName Win32_VideoController | Select-Object -ExpandProperty Name`
+	output, err := powershellJSON(ctx, query)
 	if err != nil {
 		return nil
 	}

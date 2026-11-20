@@ -8,21 +8,46 @@ import { Input } from "@/components/ui/input";
 import { Spinner } from "@/components/ui/spinner";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { addressChoices, proxyModes, useProxySettings } from "@/features/settings/use-proxy-settings";
-import type { SystemProxyInfo } from "@/mygo";
+import type { SystemProxyInfo, SystemProxyKind, SystemRoute } from "@/mygo";
+
+const systemProxyNames: Record<SystemProxyKind, string> = {
+  http: "HTTP",
+  https: "HTTPS",
+  socks: "SOCKS",
+  auto_config: "自动配置",
+  auto_discovery: "自动发现",
+};
+
+function isAutomatic(kind: SystemProxyKind) {
+  return kind === "auto_config" || kind === "auto_discovery";
+}
+
+function routeLabel(route: SystemRoute) {
+  switch (route.status) {
+    case "direct": return "直连";
+    case "error": return "解析失败";
+    case "proxy": return `${route.protocol}://${route.address}`;
+  }
+}
 
 function systemDisplayEntries(info: SystemProxyInfo) {
-  const rows = [...info.settings];
-  const showAllRoutes = !info.settingsAvailable || info.settings.some(
-    ({ name }) => name === "自动配置" || name === "自动发现",
-  );
-  const socks = info.settings.find(({ name }) => name === "SOCKS");
+  const rows = info.settings.map(({ kind, address }) => ({
+    name: systemProxyNames[kind],
+    address: isAutomatic(kind) ? "已开启" : address || "地址不可用",
+  }));
+  const showAllRoutes = !info.settingsAvailable || info.settings.some(({ kind }) => isAutomatic(kind));
+  const socks = info.settings.find(({ kind }) => kind === "socks");
 
-  for (const [protocol, address] of [["HTTP", info.http], ["HTTPS", info.https]] as const) {
-    const configured = info.settings.find(({ name }) => name === protocol);
+  for (const [kind, route] of [["http", info.http], ["https", info.https]] as const) {
+    const configured = info.settings.find((entry) => entry.kind === kind) ?? socks;
     const duplicate = configured
-      ? address === `http://${configured.address}`
-      : socks ? address === `socks5://${socks.address}` : address === "直连";
-    if (showAllRoutes || !duplicate) rows.push({ name: `应用 ${protocol}`, address });
+      ? route.status === "proxy" &&
+        route.protocol === (configured.kind === "socks" ? "socks5" : "http") &&
+        route.address === configured.address
+      : route.status === "direct";
+    if (showAllRoutes || !duplicate) {
+      rows.push({ name: `应用 ${systemProxyNames[kind]}`, address: routeLabel(route) });
+    }
   }
   return rows;
 }

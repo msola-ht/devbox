@@ -22,7 +22,7 @@ const checkURL = "https://" + checkHost + "/"
 
 var errProxyAuth = errors.New("代理服务器要求认证，当前设置不支持代理认证。")
 
-var environmentProxy = sync.OnceValue(func() func(*url.URL) (*url.URL, error) {
+var environmentProxy = sync.OnceValue(func() *httpproxy.Config {
 	config := httpproxy.FromEnvironment()
 	allProxy := os.Getenv("ALL_PROXY")
 	if allProxy == "" {
@@ -34,20 +34,36 @@ var environmentProxy = sync.OnceValue(func() func(*url.URL) (*url.URL, error) {
 	if config.HTTPSProxy == "" {
 		config.HTTPSProxy = allProxy
 	}
-	if config.HTTPProxy == "" && config.HTTPSProxy == "" && config.NoProxy == "" {
-		return nil
-	}
-	return config.ProxyFunc()
+	return config
 })
 
 func systemProxy(req *http.Request) (*url.URL, error) {
 	if isLoopback(req.URL.Hostname()) {
 		return nil, nil
 	}
-	if resolve := environmentProxy(); resolve != nil {
-		return resolve(req.URL)
+	config := environmentProxy()
+	if (req.URL.Scheme == "http" && config.HTTPProxy != "") ||
+		(req.URL.Scheme == "https" && config.HTTPSProxy != "") {
+		return config.ProxyFunc()(req.URL)
 	}
-	return netproxy.Proxy(req)
+
+	if config.HTTPProxy == "" && config.HTTPSProxy == "" && config.NoProxy == "" {
+		return netproxy.Proxy(req)
+	}
+
+	if config.NoProxy != "" {
+		// ProxyFunc exposes NO_PROXY matching through a configured proxy.
+		// This address is only used to check whether the target is bypassed.
+		bypass := httpproxy.Config{
+			HTTPProxy:  "http://proxy.invalid",
+			HTTPSProxy: "http://proxy.invalid",
+			NoProxy:    config.NoProxy,
+		}
+		if route, _ := bypass.ProxyFunc()(req.URL); route == nil {
+			return nil, nil
+		}
+	}
+	return systemRoute(req)
 }
 
 func systemInfo(ctx context.Context) (SystemProxyInfo, error) {
@@ -58,7 +74,7 @@ func systemInfo(ctx context.Context) (SystemProxyInfo, error) {
 	info := SystemProxyInfo{SettingsAvailable: available, Settings: entries}
 	for _, target := range []struct {
 		scheme string
-		result *string
+		result *SystemRoute
 	}{
 		{"http", &info.HTTP},
 		{"https", &info.HTTPS},
@@ -73,11 +89,15 @@ func systemInfo(ctx context.Context) (SystemProxyInfo, error) {
 		}
 		switch {
 		case err != nil:
-			*target.result = "解析失败"
+			target.result.Status = routeError
 		case address == nil:
-			*target.result = "直连"
+			target.result.Status = routeDirect
 		default:
-			*target.result = address.Scheme + "://" + address.Host
+			*target.result = SystemRoute{
+				Status:   routeProxy,
+				Protocol: address.Scheme,
+				Address:  address.Host,
+			}
 		}
 	}
 	return info, nil

@@ -8,7 +8,7 @@ Devbox 使用 MyGo 承载 React 界面和 Go 本机服务。前端负责展示�
 
 | 位置 | 职责 |
 | --- | --- |
-| [main.go](main.go) | 注册 Go 服务、创建窗口、启动 MyGo 应用 |
+| [main.go](main.go) | 分派系统代理查询子命令，注册 Go 服务、创建窗口并启动 MyGo 应用 |
 | [mygo.config.ts](mygo.config.ts) | 配置前端开发地址、构建命令、产物和接口生成路径 |
 | [src/main.tsx](src/main.tsx) | 恢复上次路由，挂载 React、StrictMode、HashRouter 和浮动提示 |
 | [src/app.tsx](src/app.tsx) | 将合法路由映射为页面，组合应用外壳、导航和页面 |
@@ -25,6 +25,7 @@ Devbox 使用 MyGo 承载 React 界面和 Go 本机服务。前端负责展示�
 | [internal/devtools](internal/devtools/index.md) | 本机开发工具检测 |
 | [internal/proxy](internal/proxy/index.md) | 代理配置、路由解析和连接检查 |
 | [internal/configfile](internal/configfile/index.md) | 配置文件定位和 JSON 写入 |
+| [internal/localcmd](internal/localcmd/index.md) | 本机短命令执行和子进程取消 |
 
 应用外壳通过属性接收侧栏、面包屑和页面内容。页面组合业务组件；导航组织入口与路由信息。新增业务沿用 `src/features/<业务>` 和 `internal/<业务>` 的组织方式。
 
@@ -47,11 +48,15 @@ flowchart TD
     Proxy --> Settings[代理配置存储]
     Snapshot --> ConfigFile[配置文件定位与 JSON 写入]
     Settings --> ConfigFile
+    Collector --> Command[本机命令执行]
+    DevTools --> Command
+    Network --> Command
 ```
 
 - 页面与业务组件负责展示和用户操作；加载、刷新、取消和请求结果协调集中在业务 Hook。
 - Go Service 组合具体采集与存储能力，负责业务顺序、超时和错误处理。被绑定服务的导出方法属于前端可调用契约。
 - 采集模块负责系统接口与平台命令，存储模块负责文件格式与读写，二者通过数据模型协作。
+- [localcmd](internal/localcmd/index.md) 执行短命令并管理子进程，业务模块指定命令、环境与截止时间。Windows 的显卡和磁盘采集共用 PowerShell JSON 查询入口。
 - 业务界面通过 shadcn 组件和内置变体组合。业务内的格式化和请求逻辑位于所属业务目录。
 - 当前采用具体函数组合。公共模块与接口的提取以实际复用、替换实现或依赖解耦需求为依据。
 
@@ -154,38 +159,43 @@ MyGo 接口生成会执行应用入口直到 `App.Run`。入口中保持服务�
 
 ## 开发工具检测
 
-“开发工具”页面位于 `/tools`。当前包含 Homebrew，进入页面和手动刷新均由 [use-homebrew.ts](src/features/devtools/use-homebrew.ts) 调用 `DevToolsService.detectHomebrew()`。开始新请求或离开页面时取消旧请求，已取消的请求不会更新页面。
+“开发工具”页面位于 `/tools`。Git、uv、Python 和 Homebrew 共用[检测卡片](src/features/devtools/tool-card.tsx)和 [use-tool-detection.ts](src/features/devtools/use-tool-detection.ts)，分别调用 `DevToolsService.detectGit()`、`detectUV()`、`detectPython()` 和 `detectHomebrew()`。进入页面时分别检测，用户可以单独刷新。开始同一工具的新请求或离开页面时取消旧请求，已取消的请求不会更新页面。
 
-Go 的 [DetectHomebrew](internal/devtools/homebrew.go) 先从应用进程的 `PATH` 查找绝对可执行入口。未解析到可用绝对入口时检查 `/opt/homebrew/bin/brew` 和 `/usr/local/bin/brew`，按应用进程架构优先选择对应的默认路径。选定入口后直接执行 `brew --version`，命令的截止时间为五秒。返回的路径是本次执行使用的入口。
+Go 在 [devtools](internal/devtools/index.md) 内共用 `ToolDetection`、应用进程的 `PATH` 查找和命令执行。工具各自决定入口和版本读取方式。每条命令的截止时间为五秒。取消时，Unix 终止命令所在的进程组，Windows 终止命令所在的 Job Object。Windows 后台命令使用无控制台窗口模式。成功结果中的路径来自实际执行的入口或解释器。
+
+- [Git](internal/devtools/git.go) 使用 `PATH` 中的绝对入口。在 macOS 上，入口解析为 `/usr/bin/git` 时，通过 `xcode-select --print-path` 查找当前开发工具目录，直接执行其中的 `usr/bin/git`，避免触发安装提示。
+- [uv](internal/devtools/uv.go) 使用 `PATH` 中的绝对入口并执行 `uv --version`。
+- [Python](internal/devtools/python.go) 在 macOS 和 Linux 上查找 `python3`，在 Windows 上查找 `python.exe`。macOS 的 `/usr/bin/python3` 与 Git 共用 Apple 开发工具目录查询。Windows 的应用执行别名通过 `pymanager.exe list --one --format=json` 查询已安装解释器。探测子进程在隔离模式中读取 Python 3 版本和 `sys.executable`，Windows 探测为子进程关闭安装管理器的自动安装选项。
+- [Homebrew](internal/devtools/homebrew.go) 在 macOS 上检测。通过 `PATH` 未解析到可用绝对入口时，按应用进程架构查找 `/opt/homebrew/bin/brew` 和 `/usr/local/bin/brew`。
 
 | `status` | 含义 |
 | --- | --- |
 | `available` | 命令成功并返回可识别的版本，包含 `path` 和 `version` |
-| `not_found` | 应用的 `PATH` 和两个默认位置均未找到可用入口 |
+| `not_found` | 在该工具的查找范围内未找到入口，包含 `message` |
 | `failed` | 入口无法使用、命令执行失败或超时、版本格式未识别，包含 `message` 及已知的 `path` |
-| `unsupported` | 当前系统不是 macOS，跳过查找和执行 |
+| `unsupported` | 当前平台不适用该项检测，包含 `message` |
 
-业务状态随普通响应返回。调用取消通过 MyGo 结束请求，检测结果仅保存在当前页面。
+业务状态随普通响应返回。调用取消通过 MyGo 结束请求，检测结果仅保存在当前页面。一次请求失败只影响对应卡片。
 
 ## 代理设置
 
 设置页通过 [use-proxy-settings.ts](src/features/settings/use-proxy-settings.ts) 管理表单，使用 [proxy-settings-card.tsx](src/features/settings/proxy-settings-card.tsx) 展示代理模式。默认系统代理；手动模式选择 `127.0.0.1:7890`、`127.0.0.1:7897` 或自定义主机与端口，HTTP 和 SOCKS5 使用同一个地址。代理地址不包含认证信息。
 
-保存、恢复和连接检查通过浮动提示报告结果。系统代理信息刷新期间保留上次读取结果。系统配置和访问 `example.com` 的实际路由在同一个三列网格中展示。macOS 上与系统配置一致的路由合并展示，有自动配置时单独列出实际路由。其他平台展示实际路由。
+保存、恢复和连接检查通过浮动提示报告结果。系统代理信息刷新期间保留上次读取结果。系统配置和访问 `example.com` 的实际路由在同一个三列网格中展示。后端返回配置类型、路由状态、协议和去掉认证信息的地址。前端按这些字段合并重复项并生成中文标签。macOS 上有自动配置时单独列出实际路由。其他平台展示实际路由。
 
 | 前端调用 | 行为 |
 | --- | --- |
 | `ProxyService.get()` | 返回已保存设置。文件缺失时返回默认值，文件内容无效或版本不兼容时返回 `null`，其他读取错误拒绝 |
-| `ProxyService.getSystemInfo()` | 读取系统配置和示例地址的实际路由。取消可终止 macOS 配置查询，正在进行的 MyGo 平台解析会继续到返回 |
+| `ProxyService.getSystemInfo()` | 读取系统配置和示例地址的实际路由。取消可终止 macOS 配置查询和子进程路由查询。进程内的 MyGo 平台解析会继续到返回 |
 | `ProxyService.save(settings)` | 验证并保存设置，成功后更新服务状态。非手动模式保留上次的手动地址 |
 | `ProxyService.reset()` | 用系统模式和 `127.0.0.1:7890` 替换设置文件，成功后返回默认设置 |
-| `ProxyService.check(settings)` | 用草稿对 `https://example.com/` 发起 HEAD 请求，成功时返回 `void`。请求使用十秒截止时间，可取消手动探测和网络请求。已开始的系统代理解析会继续到返回 |
+| `ProxyService.check(settings)` | 用草稿对 `https://example.com/` 发起 HEAD 请求，成功时返回 `void`。请求使用十秒截止时间，可取消手动探测、子进程路由查询和网络请求 |
 
 代理配置保存在 `os.UserConfigDir()/devbox/proxy.json`，当前格式版本为 `1`。设置页识别无效文件后提供恢复默认设置操作。保存或恢复失败时保留当前配置。服务首次读取或保存时加载配置，服务注册和接口生成期间无需读取。
 
 连接检查是当前唯一的代理网络操作。手动代理客户端首次请求通过 SOCKS5 握手识别所选地址，未识别到无认证 SOCKS5 时使用 HTTP，探测结果由客户端复用。系统和手动模式都绕过本机回环地址。连接检查在 HTTP `CONNECT` 阶段识别代理认证错误。
 
-实际路由展示和连接检查共用系统代理解析。启动环境中的 `HTTP_PROXY`、`HTTPS_PROXY` 各自优先，`ALL_PROXY` 填补缺少的协议配置，`NO_PROXY` 指定绕过范围。存在这些变量时使用环境规则，否则交由 MyGo 的 `netproxy.Proxy` 按平台解析。MyGo 按协议和主机缓存结果五秒，解析没有可用结果时直连，其接口无法区分未配置与解析失败。macOS 系统配置使用 `scutil --proxy` 读取。外部进程的代理适配见[代理设计](PROXY_DESIGN.md)。
+实际路由展示和连接检查共用系统代理解析。启动环境中的 `HTTP_PROXY`、`HTTPS_PROXY` 各自优先，`ALL_PROXY` 填补缺少的协议配置，`NO_PROXY` 匹配的目标直连。请求协议没有环境代理时，交由 MyGo 的 `netproxy.Proxy` 按平台解析。没有代理环境变量时，MyGo 在应用进程内按协议和主机缓存结果五秒。存在代理环境变量时，桌面端通过不继承这些变量的短命令读取系统路由，最长等待六秒。MyGo 返回空路由时直连。macOS 系统配置使用 `scutil --proxy` 读取。外部进程的代理适配见[代理设计](PROXY_DESIGN.md)。
 
 ## 修改与验证
 

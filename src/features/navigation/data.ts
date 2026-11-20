@@ -1,5 +1,4 @@
 import {
-  GalleryVerticalEndIcon,
   LayoutDashboardIcon,
   Settings2Icon,
   WrenchIcon,
@@ -7,33 +6,22 @@ import {
 
 import { appRoutes } from "@/app-routes";
 
-import type { SidebarData } from "./model";
+import type { NavigationItem } from "./model";
 
-export const navigationData = {
-  user: {
-    name: "shadcn",
-    email: "m@example.com",
+export const navigationData = [
+  {
+    title: appRoutes["/"].title,
+    icon: LayoutDashboardIcon,
+    url: "/",
   },
-  team: {
-    name: "Acme Inc",
-    icon: GalleryVerticalEndIcon,
-    plan: "Enterprise",
+  {
+    title: appRoutes["/tools"].title,
+    icon: WrenchIcon,
+    url: "/tools",
   },
-  navigation: [
-    {
-      title: appRoutes["/"].title,
-      icon: LayoutDashboardIcon,
-      url: "/",
-    },
-    {
-      title: appRoutes["/tools"].title,
-      icon: WrenchIcon,
-      url: "/tools",
-    },
-    {
-      title: appRoutes["/settings"].title,
-      icon: Settings2Icon,
-      url: "/settings",
-    },
-  ],
-} satisfies SidebarData;
+  {
+    title: appRoutes["/settings"].title,
+    icon: Settings2Icon,
+    url: "/settings",
+  },
+] satisfies readonly NavigationItem[];

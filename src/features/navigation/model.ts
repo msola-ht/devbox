@@ -7,21 +7,3 @@ export interface NavigationItem {
   url: AppPath;
   icon: LucideIcon;
 }
-
-export interface Team {
-  name: string;
-  icon: LucideIcon;
-  plan: string;
-}
-
-export interface User {
-  name: string;
-  email: string;
-  avatar?: string;
-}
-
-export interface SidebarData {
-  user: User;
-  team: Team;
-  navigation: readonly NavigationItem[];
-}

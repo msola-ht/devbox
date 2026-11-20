@@ -15,18 +15,12 @@ export interface GPUInfo {
   model: string;
 }
 
-/** HomebrewDetection reports availability and the executable used for detection. */
-export interface HomebrewDetection {
-  status: string;
-  path: string;
-  version: string;
-  message: string;
-}
-
 /** ManualConfig identifies the server shared by HTTP and SOCKS5 proxies. */
 export interface ManualConfig {
   address: string;
 }
+
+export type RouteStatus = "direct" | "proxy" | "error";
 
 /** Settings contains the effective mode and the last manual proxy. */
 export interface Settings {
@@ -34,9 +28,8 @@ export interface Settings {
   manual: ManualConfig;
 }
 
-/** SystemEntry is one enabled system proxy setting. */
 export interface SystemEntry {
-  name: string;
+  kind: SystemProxyKind;
   address: string;
 }
 
@@ -59,8 +52,18 @@ export interface SystemInfo {
 export interface SystemProxyInfo {
   settingsAvailable: boolean;
   settings: SystemEntry[];
-  http: string;
-  https: string;
+  http: SystemRoute;
+  https: SystemRoute;
+}
+
+/** SystemProxyKind identifies an enabled OS proxy setting. */
+export type SystemProxyKind = "http" | "https" | "socks" | "auto_config" | "auto_discovery";
+
+/** SystemRoute describes a resolved route without credentials. */
+export interface SystemRoute {
+  status: RouteStatus;
+  protocol: string;
+  address: string;
 }
 
 /** SystemSnapshot contains system information and the time collection completed. */
@@ -68,6 +71,17 @@ export interface SystemSnapshot {
   info: SystemInfo;
   collectedAt: string;
 }
+
+/** ToolDetection reports availability, executable path, version, and diagnostics. */
+export interface ToolDetection {
+  status: ToolStatus;
+  path: string;
+  version: string;
+  message: string;
+}
+
+/** ToolStatus describes the outcome of detecting a tool. */
+export type ToolStatus = "available" | "not_found" | "failed" | "unsupported";
 
 // ---- Services ----
 
@@ -107,6 +121,12 @@ export const ProxyService = {
 
 /** Service exposes local developer tool detection. */
 export const DevToolsService = {
+  /** DetectGit checks the Git executable found in the app's PATH. */
+  detectGit: bind<[], ToolDetection>("DevToolsService.DetectGit", () => []),
   /** DetectHomebrew looks up Homebrew and reads its version on macOS. */
-  detectHomebrew: bind<[], HomebrewDetection>("DevToolsService.DetectHomebrew", () => []),
+  detectHomebrew: bind<[], ToolDetection>("DevToolsService.DetectHomebrew", () => []),
+  /** DetectPython reports the Python 3 interpreter selected by the app environment. */
+  detectPython: bind<[], ToolDetection>("DevToolsService.DetectPython", () => []),
+  /** DetectUV checks the uv executable found in the app's PATH. */
+  detectUV: bind<[], ToolDetection>("DevToolsService.DetectUV", () => []),
 } as const;

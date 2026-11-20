@@ -1,16 +1,25 @@
 package main
 
 import (
+	"log"
+	"os"
+
 	"devbox/internal/devtools"
 	"devbox/internal/proxy"
 	"devbox/internal/runtimeenv"
 	"devbox/internal/systeminfo"
-	"log"
 
 	"github.com/egoist/mygo"
 )
 
 func main() {
+	if handled, err := proxy.HandleSystemRouteCommand(os.Args); handled {
+		if err != nil {
+			log.Fatal(err)
+		}
+		return
+	}
+
 	mygo.BindAs("SystemService", &systeminfo.Service{})
 	mygo.BindAs("EnvironmentService", runtimeenv.Service{})
 	mygo.BindAs("ProxyService", &proxy.Service{})

@@ -1,14 +1,15 @@
+import { GalleryVerticalEndIcon } from "lucide-react";
+
 import {
   Sidebar,
   SidebarContent,
-  SidebarFooter,
   SidebarHeader,
+  SidebarMenu,
+  SidebarMenuButton,
+  SidebarMenuItem,
   SidebarRail,
 } from "@/components/ui/sidebar";
 import { NavMain } from "@/features/navigation/nav-main";
-import { NavProjects } from "@/features/navigation/nav-projects";
-import { NavUser } from "@/features/navigation/nav-user";
-import { TeamHeader } from "@/features/navigation/team-header";
 
 import { navigationData } from "./data";
 
@@ -16,15 +17,20 @@ export function AppSidebar() {
   return (
     <Sidebar collapsible="icon">
       <SidebarHeader>
-        <TeamHeader team={navigationData.team} />
+        <SidebarMenu>
+          <SidebarMenuItem>
+            <SidebarMenuButton size="lg" render={<div />} className="pointer-events-none">
+              <div className="flex aspect-square size-8 items-center justify-center rounded-lg bg-sidebar-primary text-sidebar-primary-foreground">
+                <GalleryVerticalEndIcon aria-hidden />
+              </div>
+              <span className="truncate font-medium">Devbox</span>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+        </SidebarMenu>
       </SidebarHeader>
       <SidebarContent>
-        <NavMain items={navigationData.navigation} />
-        <NavProjects />
+        <NavMain items={navigationData} />
       </SidebarContent>
-      <SidebarFooter>
-        <NavUser user={navigationData.user} />
-      </SidebarFooter>
       <SidebarRail />
     </Sidebar>
   );

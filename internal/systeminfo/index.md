@@ -5,6 +5,7 @@
 - [model.go](model.go)：系统信息、GPU 与采集快照的数据结构。
 - [service.go](service.go) 管理服务接口、采集超时和快照的内存与文件保存。
 - [collector.go](collector.go)：系统信息采集与 GPU、磁盘并行查询。
+- [powershell_windows.go](powershell_windows.go) 为 Windows GPU 和磁盘查询提供 PowerShell JSON 输出。
 - [snapshot_store.go](snapshot_store.go)：快照文件位置、格式校验和读写。
 - [graphics_darwin.go](graphics_darwin.go)：macOS GPU 信息。
 - [graphics_linux.go](graphics_linux.go)：Linux GPU 信息。
