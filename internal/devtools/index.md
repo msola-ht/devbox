@@ -15,7 +15,7 @@
 - [apple_tools.go](apple_tools.go) 为 Git 和 Python 定位 Apple 开发工具目录中的实际命令。
 - [homebrew.go](homebrew.go) 提供 Homebrew 检测和 macOS 默认路径查找。
 - [node.go](node.go) 检测 Node.js，为 Node.js 和 npm 查找已知版本目录并识别来源。
-- [javascript.go](javascript.go) 提供 npm 和 pnpm 检测及共用的版本读取逻辑。
+- [javascript.go](javascript.go) 提供 npm 和 pnpm 检测、Corepack 离线探测及 JavaScript 版本解析。
 - [javascript_other.go](javascript_other.go) 在 Windows 以外直接执行 JavaScript 工具的版本命令。
 - [javascript_windows.go](javascript_windows.go) 在 Windows 执行版本命令，支持 `npm.cmd` 和 `pnpm.cmd` 等批处理入口。
 

@@ -16,7 +16,8 @@ func (s *Service) DetectNode(ctx context.Context, refresh bool) ([]ToolDetection
 func detectNode(ctx context.Context) ([]ToolDetection, error) {
 	return detectNodeTool(ctx, "node", "在已检查的路径中没有找到 Node.js。",
 		func(ctx context.Context, path string) ToolDetection {
-			return probeJavaScriptVersion(ctx, path)
+			output, err := runJavaScriptVersion(ctx, path, nil)
+			return javascriptVersionDetection(path, output, err)
 		})
 }
 

@@ -2,9 +2,13 @@ package devtools
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"regexp"
+	"strings"
 )
 
 var javascriptVersion = regexp.MustCompile(`^v?[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?(\+[0-9A-Za-z.-]+)?$`)
@@ -40,8 +44,24 @@ func probePackageManagerVersion(ctx context.Context, name, path string, settings
 	if inherited := os.Getenv("PATH"); inherited != "" {
 		commandPath += string(os.PathListSeparator) + inherited
 	}
-	environment := []string{"PATH=" + commandPath, "COREPACK_ENABLE_NETWORK=0", "COREPACK_ENABLE_PROJECT_SPEC=0"}
-	result := probeJavaScriptVersion(ctx, path, append(environment, settings...)...)
+	environment := []string{
+		"PATH=" + commandPath,
+		"COREPACK_ENABLE_NETWORK=0",
+		"COREPACK_ENABLE_PROJECT_SPEC=0",
+		"COREPACK_DEFAULT_TO_LATEST=0",
+		"COREPACK_ENABLE_DOWNLOAD_PROMPT=0",
+	}
+	output, err := runJavaScriptVersion(ctx, path, append(environment, settings...))
+	var exitErr *exec.ExitError
+	if errors.As(err, &exitErr) && strings.Contains(string(exitErr.Stderr), "Network access disabled by the environment; can't reach ") {
+		return ToolDetection{
+			Status:  statusFailed,
+			Path:    path,
+			Source:  sourceCorepack,
+			Message: fmt.Sprintf("Corepack 的本地缓存中缺少 %s 的默认版本。请先用 Corepack 安装所需版本，再刷新检测。", name),
+		}
+	}
+	result := javascriptVersionDetection(path, output, err)
 	if result.Status == statusAvailable {
 		dir := filepath.Dir(result.resolvedPath)
 		if filepath.Base(result.resolvedPath) == name+".js" &&
@@ -52,8 +72,7 @@ func probePackageManagerVersion(ctx context.Context, name, path string, settings
 	return result
 }
 
-func probeJavaScriptVersion(ctx context.Context, path string, environment ...string) ToolDetection {
-	output, err := runJavaScriptVersion(ctx, path, environment)
+func javascriptVersionDetection(path string, output []byte, err error) ToolDetection {
 	version := firstOutputLine(output)
 	if !javascriptVersion.MatchString(version) {
 		version = ""

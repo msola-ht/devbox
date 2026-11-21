@@ -57,7 +57,7 @@ export function ToolResultsDialog({
         </DialogTrigger>
         <TooltipContent>{label}</TooltipContent>
       </Tooltip>
-      <DialogContent className="max-h-[calc(100dvh-2rem)] grid-rows-[auto_minmax(0,1fr)] sm:max-w-lg">
+      <DialogContent className="max-h-[calc(100dvh-2rem)] grid-cols-1 grid-rows-[auto_minmax(0,1fr)] sm:max-w-lg">
         <DialogHeader className="min-h-7 justify-center pr-8">
           <DialogTitle>{name} 安装详情</DialogTitle>
         </DialogHeader>
@@ -111,18 +111,16 @@ export function ToolResult({
   }
   const role = compact ? undefined : "listitem";
   const path = result.path && (
-    compact ? (
-      <Tooltip>
-        <TooltipTrigger render={<code className="block min-w-0 truncate" tabIndex={0} />}>
+    <Tooltip>
+      <TooltipTrigger render={<code className="block min-w-0 truncate" tabIndex={0} />}>
+        {result.path}
+      </TooltipTrigger>
+      <TooltipContent>
+        <code className="min-w-0 wrap-anywhere" aria-hidden="true">
           {result.path}
-        </TooltipTrigger>
-        <TooltipContent>
-          <code className="min-w-0 wrap-anywhere">{result.path}</code>
-        </TooltipContent>
-      </Tooltip>
-    ) : (
-      <code className="wrap-anywhere">{result.path}</code>
-    )
+        </code>
+      </TooltipContent>
+    </Tooltip>
   );
 
   if (compact && result.status === "available") {

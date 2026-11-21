@@ -1,6 +1,6 @@
 # 后端索引
 
-Go 本机业务模块，由 [main.go](../main.go) 注册为 MyGo 服务，前端通过生成接口调用。
+Go 本机业务与基础模块。[main.go](../main.go) 注册系统信息、运行环境、开发工具和代理服务，前端通过 MyGo 生成接口调用。
 
 - [systeminfo](systeminfo/index.md)：系统信息采集、快照存储与服务接口。
 - [runtimeenv](runtimeenv/index.md) 提供运行环境读取。
