@@ -6,7 +6,7 @@
 - [tool-catalog.ts](tool-catalog.ts) 定义工具分组、顺序、检测方法和平台适用范围。
 - [tool-card.tsx](tool-card.tsx) 组合工具摘要、单项刷新、请求提示和详情入口。
 - [tool-results.tsx](tool-results.tsx) 渲染检测状态、安装来源、路径提示和安装详情弹窗。
-- [uv-install-action.tsx](uv-install-action.tsx) 在 uv 卡片展示安装入口、任务状态、取消和输出。
+- [uv-install-action.tsx](uv-install-action.tsx) 展示 uv 安装、更新、卸载确认、任务进度和输出。
 - [use-uv-install.ts](use-uv-install.ts) 启动或取消任务，读取任务状态，并在结束后更新卡片的检测结果。
 
 [业务模块索引](../index.md) · [后端模块](../../../internal/devtools/index.md) · [项目架构](../../../ARCHITECTURE.md)

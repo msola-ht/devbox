@@ -1,6 +1,7 @@
 import { RefreshCwIcon } from "lucide-react";
 import type { Cancellable } from "mygo-runtime";
-import { Suspense, type ComponentType } from "react";
+import { Suspense, useEffect, type ComponentType } from "react";
+import { Link } from "react-router";
 
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -31,7 +32,8 @@ interface ToolCardProps {
   detect: Cancellable<[boolean], ToolDetection[]>;
   project?: string;
   InstallAction?: ComponentType<{
-    canInstall: boolean;
+    detection: ToolDetection | undefined;
+    ready: boolean;
     project: string;
     reload: () => Promise<void>;
   }>;
@@ -49,6 +51,15 @@ export function ToolCard({ name, description, detect, project = "", InstallActio
     results.find(({ status }) => status === "available") ?? results[0];
   const version = summary?.status === "available" ? summary.version : "";
   const shortVersion = version.replace(/\s+\([^()]*\)$/, "");
+
+  useEffect(() => {
+    if (!project) return;
+    function recheckProject() {
+      void reload();
+    }
+    window.addEventListener("focus", recheckProject);
+    return () => window.removeEventListener("focus", recheckProject);
+  }, [project, reload]);
 
   async function openProjectDirectory() {
     try {
@@ -117,7 +128,13 @@ export function ToolCard({ name, description, detect, project = "", InstallActio
             </AlertDescription>
           </Alert>
         )}
-        {summary && <ToolResult result={summary} compact />}
+        {summary && <ToolResult result={summary} compact project={!!project} />}
+        {project && summary?.status === "project_unavailable" && (
+          <Button className="self-start" size="sm" variant="outline" nativeButton={false}
+            render={<Link to="/" />}>
+            前往概览
+          </Button>
+        )}
         {project && summary?.status === "failed" && (
           <Button className="self-start" type="button" size="sm" variant="outline"
             onClick={() => void openProjectDirectory()}>
@@ -135,8 +152,8 @@ export function ToolCard({ name, description, detect, project = "", InstallActio
       {InstallAction && (
         <Suspense fallback={null}>
           <InstallAction
-            canInstall={!!summary && !detecting && !requestFailed &&
-              (project ? summary.status === "not_found" : !version)}
+            detection={summary}
+            ready={!detecting && !requestFailed}
             project={project}
             reload={reload}
           />

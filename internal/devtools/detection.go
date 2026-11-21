@@ -35,10 +35,12 @@ type Service struct {
 type ToolStatus string
 
 const (
-	statusAvailable   ToolStatus = "available"
-	statusNotFound    ToolStatus = "not_found"
-	statusFailed      ToolStatus = "failed"
-	statusUnsupported ToolStatus = "unsupported"
+	statusAvailable          ToolStatus = "available"
+	statusNotFound           ToolStatus = "not_found"
+	statusFailed             ToolStatus = "failed"
+	statusUnsupported        ToolStatus = "unsupported"
+	statusIncompatible       ToolStatus = "incompatible"
+	statusProjectUnavailable ToolStatus = "project_unavailable"
 )
 
 // ToolDetection reports availability and details of a local tool installation.

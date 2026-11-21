@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"log"
+	"net/http"
 	"os"
 
 	"devbox/internal/devtools"
@@ -24,6 +25,8 @@ func main() {
 	proxyService := &proxy.Service{}
 	toolsService, stopTools := devtools.NewService(func(ctx context.Context) ([]string, error) {
 		return proxy.HomebrewEnvironment(ctx, proxyService)
+	}, func(ctx context.Context) (*http.Client, error) {
+		return proxy.DownloadClient(ctx, proxyService)
 	})
 	mygo.App.OnQuit(stopTools)
 

@@ -85,7 +85,10 @@ export interface ToolDetection {
 export type ToolSource = "" | "unknown" | "system" | "apple_developer_tools" | "homebrew" | "fnm" | "nvm" | "nvm_windows" | "uv" | "corepack";
 
 /** ToolStatus describes the outcome of detecting a tool. */
-export type ToolStatus = "available" | "not_found" | "failed" | "unsupported";
+export type ToolStatus = "available" | "not_found" | "failed" | "unsupported" | "incompatible" | "project_unavailable";
+
+/** UVInstallAction identifies an operation on uv. */
+export type UVInstallAction = "install" | "update" | "uninstall";
 
 /** UVInstallStatus is the current phase or outcome of a uv installation. */
 export type UVInstallStatus = "running" | "canceling" | "succeeded" | "failed" | "canceled" | "missing_homebrew" | "not_detected";
@@ -93,9 +96,12 @@ export type UVInstallStatus = "running" | "canceling" | "succeeded" | "failed" |
 /** UVInstallTask reports the latest app-owned installation and its recent output. */
 export interface UVInstallTask {
   id: number;
+  action: UVInstallAction;
   status: UVInstallStatus;
   message: string;
   output: string;
+  downloadPercent: number | null;
+  cancelable: boolean;
 }
 
 // ---- Services ----
@@ -128,8 +134,8 @@ export const ProxyService = {
 
 /** Service exposes local developer tool detection and installation. */
 export const DevToolsService = {
-  /** CancelUVInstall stops the matching active task and its subprocesses. */
-  cancelUVInstall: bind<[string, number], void>("DevToolsService.CancelUVInstall", (project: string, id: number) => [project, id]),
+  /** CancelUVInstall requests cancellation and returns the current task snapshot. */
+  cancelUVInstall: bind<[string, number], UVInstallTask | null>("DevToolsService.CancelUVInstall", (project: string, id: number) => [project, id]),
   /** DetectGH returns cached or newly detected GitHub CLI executables. */
   detectGH: bind<[boolean], ToolDetection[]>("DevToolsService.DetectGH", (refresh: boolean) => [refresh]),
   /** DetectGit returns cached or newly detected Git executables. */
@@ -158,6 +164,10 @@ export const DevToolsService = {
   detectZsh: bind<[boolean], ToolDetection[]>("DevToolsService.DetectZsh", (refresh: boolean) => [refresh]),
   /** GetUVInstall returns the most recent task, or null if none has been started. */
   getUVInstall: bind<[string], UVInstallTask | null>("DevToolsService.GetUVInstall", (project: string) => [project]),
+  /** StartProjectUVUninstall removes the managed uv installation from a project. */
+  startProjectUVUninstall: bind<[string], UVInstallTask>("DevToolsService.StartProjectUVUninstall", (project: string) => [project]),
+  /** StartProjectUVUpdate checks for and installs the latest project uv release. */
+  startProjectUVUpdate: bind<[string], UVInstallTask>("DevToolsService.StartProjectUVUpdate", (project: string) => [project]),
   /** StartUVInstall starts a uv installation or returns the active task in this scope. */
   startUVInstall: bind<[string], UVInstallTask>("DevToolsService.StartUVInstall", (project: string) => [project]),
 } as const;

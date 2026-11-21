@@ -16,6 +16,7 @@ import (
 )
 
 const uvRecordName = "install.json"
+const maxUVBinarySize = 128 << 20
 
 type projectUVRecord struct {
 	OS      string `json:"os"`
@@ -25,13 +26,21 @@ type projectUVRecord struct {
 	UVX     string `json:"uvx"`
 }
 
+type projectUVSnapshot struct {
+	record       projectUVRecord
+	recordDigest [sha256.Size]byte
+}
+
+func (s projectUVSnapshot) compatible() bool {
+	return s.record.OS == runtime.GOOS && s.record.Arch == runtime.GOARCH
+}
+
 func executableDigest(ctx context.Context, root *os.Root, name string) (string, error) {
 	info, err := root.Lstat(name)
 	if err != nil {
 		return "", err
 	}
-	const limit = 128 << 20
-	if !info.Mode().IsRegular() || info.Mode().Perm()&0111 == 0 || info.Size() > limit {
+	if !info.Mode().IsRegular() || info.Mode().Perm()&0111 == 0 || info.Size() > maxUVBinarySize {
 		return "", fmt.Errorf("%s 不是可用的工具文件", name)
 	}
 	file, err := root.Open(name)
@@ -40,7 +49,7 @@ func executableDigest(ctx context.Context, root *os.Root, name string) (string, 
 	}
 	defer file.Close()
 	hash := sha256.New()
-	reader := io.LimitReader(file, limit+1)
+	reader := io.LimitReader(file, maxUVBinarySize+1)
 	buffer := make([]byte, 64<<10)
 	var size int64
 	for {
@@ -70,7 +79,11 @@ func (s *Service) DetectProjectUV(ctx context.Context, project string, _ bool) (
 	}
 	root, err := projectdir.Open(project)
 	if err != nil {
-		return nil, err
+		message := fmt.Sprintf("无法访问工作目录（%v）。", err)
+		if errors.Is(err, fs.ErrNotExist) {
+			message = "工作目录已不存在。请在概览打开或恢复默认目录，或选择其他目录。"
+		}
+		return []ToolDetection{{Status: statusProjectUnavailable, Message: message}}, ctx.Err()
 	}
 	defer root.Close()
 	result := readProjectUV(ctx, root)
@@ -85,7 +98,19 @@ func readProjectUV(ctx context.Context, root *os.Root) ToolDetection {
 		target, err = projectdir.OpenChild(tools, "uv", false)
 		if err == nil {
 			defer target.Close()
-			return readProjectUVRecord(ctx, target)
+			path := filepath.Join(target.Name(), "uv")
+			snapshot, err := inspectProjectUV(ctx, target)
+			if err != nil {
+				return ToolDetection{Status: statusFailed, Path: path, Message: err.Error()}
+			}
+			if !snapshot.compatible() {
+				return ToolDetection{
+					Status: statusIncompatible, Path: path, Version: snapshot.record.Version,
+					Message: fmt.Sprintf("已安装的 uv %s 适用于 %s/%s，当前为 %s/%s。",
+						snapshot.record.Version, snapshot.record.OS, snapshot.record.Arch, runtime.GOOS, runtime.GOARCH),
+				}
+			}
+			return ToolDetection{Status: statusAvailable, Path: path, Version: snapshot.record.Version}
 		}
 	}
 	if errors.Is(err, fs.ErrNotExist) {
@@ -94,29 +119,24 @@ func readProjectUV(ctx context.Context, root *os.Root) ToolDetection {
 	return ToolDetection{Status: statusFailed, Message: fmt.Sprintf("无法读取项目工具目录（%v）。", err)}
 }
 
-func readProjectUVRecord(ctx context.Context, root *os.Root) ToolDetection {
-	path := filepath.Join(root.Name(), "uv")
-	failure := ToolDetection{Status: statusFailed, Path: path, Message: "项目 uv 的安装记录缺失或文件校验失败。"}
+func inspectProjectUV(ctx context.Context, root *os.Root) (projectUVSnapshot, error) {
+	const invalid = "项目 uv 的安装记录缺失或文件校验失败。"
 	info, err := root.Lstat(uvRecordName)
 	if err != nil || !info.Mode().IsRegular() || info.Size() > 4096 {
-		return failure
+		return projectUVSnapshot{}, errors.New(invalid)
 	}
 	data, err := root.ReadFile(uvRecordName)
 	var record projectUVRecord
-	if err != nil || json.Unmarshal(data, &record) != nil || record.Version == "" {
-		return failure
-	}
-	if record.OS != runtime.GOOS || record.Arch != runtime.GOARCH {
-		failure.Message = "项目 uv 的安装平台与当前系统或架构不匹配。"
-		return failure
+	if err != nil || json.Unmarshal(data, &record) != nil || record.Version == "" || record.OS == "" || record.Arch == "" {
+		return projectUVSnapshot{}, errors.New(invalid)
 	}
 	uv, err := executableDigest(ctx, root, "uv")
 	if err != nil || uv != record.UV {
-		return failure
+		return projectUVSnapshot{}, errors.New(invalid)
 	}
 	uvx, err := executableDigest(ctx, root, "uvx")
 	if err != nil || uvx != record.UVX {
-		return failure
+		return projectUVSnapshot{}, errors.New(invalid)
 	}
-	return ToolDetection{Status: statusAvailable, Path: path, Version: record.Version}
+	return projectUVSnapshot{record: record, recordDigest: sha256.Sum256(data)}, nil
 }

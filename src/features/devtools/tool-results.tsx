@@ -21,6 +21,8 @@ const statusLabels: Record<Exclude<ToolStatus, "available">, string> = {
   not_found: "当前环境未找到",
   unsupported: "当前平台不适用",
   failed: "检测失败",
+  incompatible: "架构或系统不匹配",
+  project_unavailable: "工作目录不可用",
 };
 
 const sourceLabels: Record<Exclude<ToolSource, "">, string> = {
@@ -81,12 +83,14 @@ export function ToolResultsDialog({
 export function ToolResult({
   result,
   compact = false,
+  project = false,
 }: {
   result: ToolDetection;
   compact?: boolean;
+  project?: boolean;
 }) {
   if (compact && result.status === "not_found") {
-    if (!result.path) return <span>{statusLabels.not_found}</span>;
+    if (!result.path) return <span>{project ? result.message : statusLabels.not_found}</span>;
     return (
       <Tooltip>
         <TooltipTrigger render={<span tabIndex={0} />}>
@@ -138,7 +142,7 @@ export function ToolResult({
     );
   }
 
-  if (result.status === "failed") {
+  if (result.status === "failed" || result.status === "incompatible" || result.status === "project_unavailable") {
     return (
       <div role={role}>
         <Alert variant="destructive">

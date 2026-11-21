@@ -176,6 +176,22 @@ func transportFor(settings Settings) (*http.Transport, error) {
 	return transport, nil
 }
 
+// DownloadClient creates an HTTP client with the saved proxy settings.
+func DownloadClient(ctx context.Context, service *Service) (*http.Client, error) {
+	settings, err := service.Get(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if settings == nil {
+		return nil, errInvalidSettings
+	}
+	transport, err := transportFor(*settings)
+	if err != nil {
+		return nil, err
+	}
+	return &http.Client{Transport: transport}, nil
+}
+
 func checkConnection(ctx context.Context, settings Settings) error {
 	transport, err := transportFor(settings)
 	if err != nil {

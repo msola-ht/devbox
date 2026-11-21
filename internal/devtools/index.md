@@ -10,10 +10,11 @@
 - [powershell.go](powershell.go) 在 Windows 上检测 PowerShell 和系统自带的 Windows PowerShell。
 - [zsh.go](zsh.go) 在 macOS 和 Linux 上检测 Zsh。
 - [uv.go](uv.go) 提供 uv 检测，并检查 macOS 常用安装路径及安装任务选定的 Homebrew 前缀。
-- [uv_install.go](uv_install.go) 按作用域管理 uv 安装任务、输出、取消和结束状态。
+- [uv_install.go](uv_install.go) 按作用域管理 uv 任务、进度、输出和取消。
 - [project_uv.go](project_uv.go) 检测项目内的 uv 安装记录和文件。
-- [project_uv_darwin.go](project_uv_darwin.go) 下载、校验并发布 macOS 项目内的 uv。
+- [project_uv_darwin.go](project_uv_darwin.go) 管理 macOS 项目内 uv 的安装、更新和卸载。
 - [project_uv_other.go](project_uv_other.go) 定义其他平台的项目 uv 安装结果。
+- [uv_release_darwin.go](uv_release_darwin.go) 查询、下载、核验并解包 macOS 的 uv 发行包。
 - [python.go](python.go) 查找 Python 3 并读取各解释器的路径与版本。
 - [python_launcher.go](python_launcher.go) 查询 Windows Python 安装管理器的已有解释器。
 - [apple_tools.go](apple_tools.go) 为 Git 和 Python 定位 Apple 开发工具目录中的实际命令。

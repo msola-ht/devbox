@@ -211,18 +211,26 @@ macOS 的 uv 卡片在无可用版本时提供安装入口。用户点击后，[
 | 前端调用 | 行为 |
 | --- | --- |
 | `DevToolsService.startUVInstall(project)` | 启动指定作用域的任务。相同作用域已有活动任务时返回该任务 |
-| `DevToolsService.getUVInstall(project)` | 读取该作用域最近任务的标识、状态、提示和最近 16 KiB 的合并输出。未启动过时返回 `null` |
-| `DevToolsService.cancelUVInstall(project, id)` | 请求取消该作用域内标识匹配且尚可取消的任务 |
+| `DevToolsService.startProjectUVUpdate(project)` | 查询并更新受管理的项目 uv。兼容且已是官方最新版本时结束任务。已核验但与当前平台不匹配时下载并替换 |
+| `DevToolsService.startProjectUVUninstall(project)` | 卸载项目中由 Devbox 管理的 uv。前端在用户确认后启动任务 |
+| `DevToolsService.getUVInstall(project)` | 读取该作用域最近任务的标识、操作、状态、是否可取消、提示、下载百分比和最近 16 KiB 的合并输出。未启动过时返回 `null` |
+| `DevToolsService.cancelUVInstall(project, id)` | 请求取消该作用域内标识匹配且尚可取消的任务，返回该作用域的当前任务快照 |
 
-目录校验与打开目录通过普通 IPC 调用，前端等待操作结果。目录选择使用原生对话框，Promise 在用户选定或取消时完成。安装启动接口只登记任务，磁盘检查、下载、命令执行及提交在 Go 后台完成。取消接口提交请求，前端以轮询返回的任务状态为准。
+目录校验与打开目录通过普通 IPC 调用，前端等待操作结果。目录选择使用原生对话框，Promise 在用户选定或取消时完成。安装启动接口只登记任务，磁盘检查、下载、命令执行及提交在 Go 后台完成。取消请求与项目目录的原子提交互斥。项目操作提交后，任务停止接受取消，完成清理后报告实际结果。
 
 页面轮询活动任务与输出，离开时停止读取。安装命令退出后，Go 重新检测 uv 并更新检测缓存，包括取消和命令失败的情况。命令成功且在所选 Homebrew 的 `bin/uv` 入口读到版本时，任务标为成功。命令成功但该入口未通过复检时，任务单独显示结果。页面收到结束状态时重新读取 Go 的检测缓存。MyGo 退出钩子取消任务并等待命令清理。
 
 概览页的[工作目录条](src/features/workspace/project-directory-bar.tsx) 通过 `ProjectDialog.selectDirectory()` 选择目录。原生对话框返回解析符号链接后的绝对路径，取消时返回空字符串。待确认路径由概览持有。确认自选目录时，`ProjectDialog.validateDirectory()` 只校验目录可读，成功后更新应用共享的[工作目录](src/lib/project-directory.tsx)并保存界面偏好。开发工具的项目隔离模式使用已确认的目录，并在目录改变时重建项目卡片与轮询。安装任务参数中的空目录表示系统作用域。项目视图展示 uv，macOS 可从 Astral 安装，具体边界见[项目环境方案](PROJECT_ENV_DESIGN.md)。
 
-没有保存工作目录时，应用通过 `ProjectDialog.createDefaultDirectory()` 创建或复用用户主目录下的 `.heforge-devbox`。概览通过文件夹图标打开默认目录，当前使用自选目录时提供恢复默认目录的图标，恢复前仍需预览和确认。创建默认目录和校验自选目录都在短 IPC 调用内完成。实际安装在 Go 后台创建项目内的 `.devbox/tools`，安装器只下载到应用私有临时目录。卡片在项目 uv 未安装时提供安装操作。已存在的项目 uv 不可用时，`ProjectDialog.openDirectory()` 可以从卡片打开工作目录供用户检查。代理配置保存在平台配置目录，界面偏好保存在应用存储中。
+没有保存工作目录时，应用通过 `ProjectDialog.createDefaultDirectory()` 创建或复用用户主目录下的 `.heforge-devbox`。概览通过文件夹图标打开默认目录，当前使用自选目录时提供恢复默认目录的图标，恢复前仍需预览和确认。创建默认目录和校验自选目录都在短 IPC 调用内完成。实际安装在 Go 后台创建项目内的 `.devbox/tools`。卡片在项目 uv 未安装时提供安装操作。已存在的项目 uv 不可用时，`ProjectDialog.openDirectory()` 可以从卡片打开工作目录供用户检查。代理配置保存在平台配置目录，界面偏好保存在应用存储中。
 
-`DevToolsService.detectProjectUV(project, refresh)` 读取 `.devbox/tools/uv/install.json` 并检查系统、架构和 uv、uvx 的文件指纹。项目读取每次核对文件，与全局检测缓存独立。安装器与新下载版本的探测在应用临时目录内运行，校验后将二进制与记录排他发布。完成后前端重新读取相同项目目录，作用域和所选目录作为界面偏好保存。Go 退出时等待所有活动作用域完成清理。
+[项目 uv 下载](internal/devtools/uv_release_darwin.go) 从 Astral 的 GitHub 发行版查询当前架构的安装包，查询期限为 15 秒。Grab 在五分钟内下载并核验发行包的大小和 SHA-256。Go 在应用私有临时目录中解出 uv 和 uvx，再运行新下载的 uv 读取版本。临时文件随任务清理。
+
+Go 每 200 毫秒采样已下载字节。卡片通过普通 IPC 查询后台任务，下载中每 250 毫秒查询一次，其他活动阶段每 750 毫秒查询一次。读取失败时保留上次状态，间隔 1.5 秒重试。shadcn `Progress` 展示下载百分比，下载结束后保留完成反馈并单独提示校验和解包。
+
+安装在项目工具目录中排他发布，更新通过原子交换替换旧版本，卸载先将安装目录原子移出。更新和卸载在提交前复核目录、安装记录及文件指纹。清理前再次检查移出的目录及文件，发现变化或额外文件时保留待清理目录，并在任务结果中显示其路径。
+
+`DevToolsService.detectProjectUV(project, refresh)` 读取 `.devbox/tools/uv/install.json` 并核验 uv、uvx 的文件指纹。已核验但系统或架构不匹配时返回 `incompatible`，macOS 卡片提供需确认的重新安装与卸载。记录缺失或指纹校验失败时显示失败，并提供打开工作目录的入口。工作目录不可用时返回 `project_unavailable`，卡片提供前往概览的入口。打开项目工具页、窗口重新获得焦点、手动刷新和任务结束时会重新检查磁盘。作用域和所选目录作为界面偏好保存。Go 退出时等待所有活动作用域完成清理。
 
 ## 代理设置
 
@@ -240,7 +248,7 @@ macOS 的 uv 卡片在无可用版本时提供安装入口。用户点击后，[
 
 代理配置保存在 `os.UserConfigDir()/devbox/proxy.json`，当前格式版本为 `1`。设置页识别无效文件后提供恢复默认设置操作。保存或恢复失败时保留当前配置。服务首次读取或保存时加载配置，服务注册和接口生成期间无需读取。
 
-连接检查使用应用内 HTTP 客户端。系统 uv 安装通过 Homebrew 联网，项目 uv 安装由独立下载进程联网，共用已保存的代理环境设置。手动代理客户端首次请求通过 SOCKS5 握手识别所选地址，未识别到无认证 SOCKS5 时使用 HTTP，探测结果由客户端复用。应用内的系统和手动模式都绕过本机回环地址。连接检查在 HTTP `CONNECT` 阶段识别代理认证错误。
+连接检查和项目 uv 安装共用应用内的 HTTP 代理路由。连接检查使用表单草稿，项目安装启动时为 Grab 创建采用已保存设置的客户端。系统 uv 安装通过 Homebrew 联网，应用按已保存的代理模式设置子进程环境。手动代理客户端首次请求通过 SOCKS5 握手识别所选地址，未识别到无认证 SOCKS5 时使用 HTTP，探测结果由客户端复用。应用内的系统和手动模式都绕过本机回环地址。连接检查在 HTTP `CONNECT` 阶段识别代理认证错误。
 
 实际路由展示和连接检查共用系统代理解析。启动环境中的 `HTTP_PROXY`、`HTTPS_PROXY` 各自优先，`ALL_PROXY` 填补缺少的协议配置，`NO_PROXY` 匹配的目标直连。请求协议没有环境代理时，交由 MyGo 的 `netproxy.Proxy` 按平台解析。没有代理环境变量时，MyGo 在应用进程内按协议和主机缓存结果五秒。存在代理环境变量时，桌面端通过不继承这些变量的短命令读取系统路由，最长等待六秒。MyGo 返回空路由时直连。macOS 系统配置使用 `scutil --proxy` 读取。外部进程的代理适配见[代理设计](PROXY_DESIGN.md)。
 

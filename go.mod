@@ -3,6 +3,7 @@ module devbox
 go 1.27.4
 
 require (
+	github.com/cavaliergopher/grab/v3 v3.0.1
 	github.com/egoist/mygo v0.10.0
 	github.com/shirou/gopsutil/v4 v4.26.10
 	golang.org/x/net v0.59.0
