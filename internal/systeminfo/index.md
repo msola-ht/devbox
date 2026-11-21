@@ -1,10 +1,10 @@
 # 系统信息后端索引
 
-提供 `SystemService.GetSnapshot` 与 `SystemService.Refresh`，管理本机信息采集和快照。
+提供 `SystemService.Get`，按请求读取快照或重新采集本机信息。
 
 - [model.go](model.go)：系统信息、GPU 与采集快照的数据结构。
-- [service.go](service.go) 管理服务接口、采集超时和快照的内存与文件保存。
-- [collector.go](collector.go)：系统信息采集与 GPU、磁盘并行查询。
+- [service.go](service.go) 协调会话缓存、文件快照和重新采集。
+- [collector.go](collector.go) 采集系统信息，并在独立期限内查询 GPU 和磁盘。
 - [powershell_windows.go](powershell_windows.go) 为 Windows GPU 和磁盘查询提供 PowerShell JSON 输出。
 - [snapshot_store.go](snapshot_store.go)：快照文件位置、格式校验和读写。
 - [graphics_darwin.go](graphics_darwin.go)：macOS GPU 信息。

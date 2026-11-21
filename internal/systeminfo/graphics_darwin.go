@@ -3,12 +3,13 @@ package systeminfo
 import (
 	"context"
 	"encoding/json"
-	"os/exec"
 	"strings"
+
+	"devbox/internal/localcmd"
 )
 
 func graphicsInfo(ctx context.Context) []GPUInfo {
-	output, err := exec.CommandContext(ctx, "/usr/sbin/system_profiler", "SPDisplaysDataType", "-json").Output()
+	output, err := localcmd.Output(ctx, "/usr/sbin/system_profiler", []string{"SPDisplaysDataType", "-json"}, nil)
 	if err != nil {
 		return nil
 	}

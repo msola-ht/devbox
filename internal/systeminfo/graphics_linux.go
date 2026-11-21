@@ -2,12 +2,13 @@ package systeminfo
 
 import (
 	"context"
-	"os/exec"
 	"strings"
+
+	"devbox/internal/localcmd"
 )
 
 func graphicsInfo(ctx context.Context) []GPUInfo {
-	output, err := exec.CommandContext(ctx, "lspci", "-vmm", "-d", "::03xx").Output()
+	output, err := localcmd.Output(ctx, "lspci", []string{"-vmm", "-d", "::03xx"}, nil)
 	if err != nil {
 		return nil
 	}

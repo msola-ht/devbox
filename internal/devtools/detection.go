@@ -11,10 +11,16 @@ import (
 	"time"
 
 	"devbox/internal/localcmd"
+	"devbox/internal/readcache"
 )
 
 // Service exposes local developer tool detection.
-type Service struct{}
+type Service struct {
+	git      readcache.Cache[[]ToolDetection]
+	homebrew readcache.Cache[[]ToolDetection]
+	python   readcache.Cache[[]ToolDetection]
+	uv       readcache.Cache[[]ToolDetection]
+}
 
 // ToolStatus describes the outcome of detecting a tool.
 type ToolStatus string

@@ -6,9 +6,11 @@ import (
 	"runtime"
 )
 
-// DetectGit checks the Git executables found in the app's PATH.
-func (Service) DetectGit(ctx context.Context) ([]ToolDetection, error) {
-	return detectTools(ctx, "git", "应用的 PATH 中没有找到 Git。", probeGit)
+// DetectGit returns cached or newly detected Git executables.
+func (s *Service) DetectGit(ctx context.Context, refresh bool) ([]ToolDetection, error) {
+	return s.git.Read(ctx, refresh, 0, func(ctx context.Context) ([]ToolDetection, error) {
+		return detectTools(ctx, "git", "应用的 PATH 中没有找到 Git。", probeGit)
+	})
 }
 
 func probeGit(ctx context.Context, path string) ToolDetection {

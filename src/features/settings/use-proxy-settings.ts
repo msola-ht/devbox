@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { toast } from "@/components/ui/toast";
-import { ProxyService, type Settings, type SystemProxyInfo } from "@/mygo";
+import { ProxyService, type Settings } from "@/mygo";
 
 export const proxyModes = [
   { value: "system", label: "系统代理" },
@@ -29,6 +29,9 @@ type SettingsState =
 
 type Action = "saving" | "resetting" | "checking";
 
+// Writes belong to the application, so a returning settings page reads after them.
+let pendingWrite: Promise<Settings> | null = null;
+
 function draftFrom(settings: Settings, keepCustom = false): ProxyDraft {
   const address = settings.manual.address;
   const preset = addressChoices.find(({ value }) => value === address);
@@ -52,11 +55,8 @@ function messageFrom(error: unknown, fallback: string) {
 export function useProxySettings() {
   const [settings, setSettings] = useState<SettingsState>({ status: "loading" });
   const [action, setAction] = useState<Action | null>(null);
-  const [systemInfo, setSystemInfo] = useState<SystemProxyInfo | null>(null);
-  const [systemError, setSystemError] = useState<string | null>(null);
-  const activeRequest = useRef<AbortController | null>(null);
+  const activeRequest = useRef<AbortController | Promise<Settings> | null>(null);
   const draft = settings.status === "ready" ? settings.draft : null;
-  const mode = draft?.mode;
 
   const load = useCallback(async () => {
     if (activeRequest.current) return;
@@ -64,6 +64,8 @@ export function useProxySettings() {
     activeRequest.current = controller;
     setSettings({ status: "loading" });
     try {
+      if (pendingWrite) await pendingWrite.catch(() => undefined);
+      if (controller.signal.aborted) return;
       const result = await ProxyService.get.with({ signal: controller.signal })();
       if (!controller.signal.aborted) {
         setSettings(result ? { status: "ready", draft: draftFrom(result) } : { status: "invalid" });
@@ -80,35 +82,11 @@ export function useProxySettings() {
   useEffect(() => {
     void load();
     return () => {
-      activeRequest.current?.abort();
+      const request = activeRequest.current;
+      if (request instanceof AbortController) request.abort();
       activeRequest.current = null;
     };
   }, [load]);
-
-  useEffect(() => {
-    if (mode !== "system") return;
-    let request: AbortController | undefined;
-
-    async function refresh() {
-      request?.abort();
-      const controller = new AbortController();
-      request = controller;
-      setSystemError(null);
-      try {
-        const info = await ProxyService.getSystemInfo.with({ signal: controller.signal })();
-        if (!controller.signal.aborted) setSystemInfo(info);
-      } catch (err) {
-        if (!controller.signal.aborted) setSystemError(messageFrom(err, "无法读取系统代理。"));
-      }
-    }
-
-    void refresh();
-    window.addEventListener("focus", refresh);
-    return () => {
-      window.removeEventListener("focus", refresh);
-      request?.abort();
-    };
-  }, [mode]);
 
   function change(changes: Partial<ProxyDraft>) {
     setSettings((current) => current.status === "ready"
@@ -117,26 +95,24 @@ export function useProxySettings() {
   }
 
   async function writeSettings(next: ProxyDraft | null) {
-    if (activeRequest.current) return;
-    const controller = new AbortController();
-    activeRequest.current = controller;
+    if (activeRequest.current || pendingWrite) return;
+    const request = next ? ProxyService.save(settingsFrom(next)) : ProxyService.reset();
+    activeRequest.current = request;
+    pendingWrite = request;
     setAction(next ? "saving" : "resetting");
-    const options = { signal: controller.signal };
     try {
-      const result = next
-        ? await ProxyService.save.with(options)(settingsFrom(next))
-        : await ProxyService.reset.with(options)();
-      if (controller.signal.aborted) return;
-      const keepCustom = next?.mode === "manual" && next.choice === "custom";
-      setSettings({ status: "ready", draft: draftFrom(result, keepCustom) });
+      const result = await request;
+      if (activeRequest.current === request) {
+        const keepCustom = next?.mode === "manual" && next.choice === "custom";
+        setSettings({ status: "ready", draft: draftFrom(result, keepCustom) });
+      }
       toast.add({ title: next ? "设置已保存" : "已恢复默认设置", type: "success" });
     } catch (err) {
-      if (!controller.signal.aborted) {
-        const title = next ? "保存失败" : "恢复失败";
-        toast.add({ title, description: messageFrom(err, title), type: "error" });
-      }
+      const title = next ? "保存失败" : "恢复失败";
+      toast.add({ title, description: messageFrom(err, title), type: "error" });
     } finally {
-      if (activeRequest.current === controller) {
+      pendingWrite = null;
+      if (activeRequest.current === request) {
         activeRequest.current = null;
         setAction(null);
       }
@@ -164,13 +140,15 @@ export function useProxySettings() {
   }
 
   function cancelCheck() {
-    activeRequest.current?.abort();
+    const request = activeRequest.current;
+    if (action !== "checking" || !(request instanceof AbortController)) return;
+    request.abort();
     activeRequest.current = null;
     setAction(null);
   }
 
   return {
-    settings, action, load, change, check, cancelCheck, systemInfo, systemError,
+    settings, action, load, change, check, cancelCheck,
     save: () => { if (draft) return writeSettings(draft); },
     reset: () => writeSettings(null),
   };

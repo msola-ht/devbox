@@ -2,8 +2,8 @@
 
 提供 Git、uv、Python 和 macOS Homebrew 检测服务。
 
-- [detection.go](detection.go) 定义检测结果、版本读取和带超时的命令执行。
-- [discovery.go](discovery.go) 按 PATH 和工具路径发现入口，并行探测并合并重复结果。
+- [detection.go](detection.go) 定义检测结果、会话内结果、版本读取和带超时的命令执行。
+- [discovery.go](discovery.go) 按 PATH 和工具路径发现入口，在共同期限内并行探测并合并重复结果。
 - [git.go](git.go) 提供 Git 检测和 macOS 系统 Git 定位。
 - [uv.go](uv.go) 提供 uv 检测。
 - [python.go](python.go) 查找 Python 3 并读取各解释器的路径与版本。

@@ -1,8 +1,6 @@
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Button } from "@/components/ui/button";
 import {
   Card,
-  CardAction,
   CardContent,
   CardHeader,
   CardTitle,
@@ -14,12 +12,16 @@ import {
   ItemGroup,
 } from "@/components/ui/item";
 import { Skeleton } from "@/components/ui/skeleton";
+import type { EnvironmentInfo } from "@/mygo";
 
-import { useEnvironment } from "./use-environment";
+interface EnvironmentCardProps {
+  info: EnvironmentInfo | null;
+  busy: boolean;
+  failed: boolean;
+}
 
-export function EnvironmentCard() {
-  const { info, refreshing, failed, refresh } = useEnvironment();
-  const loading = !info && refreshing;
+export function EnvironmentCard({ info, busy, failed }: EnvironmentCardProps) {
+  const loading = !info && busy;
   const fields = [
     { label: "默认登录 Shell", value: info?.loginShell },
     { label: "用户主目录", value: info?.homeDir },
@@ -29,17 +31,6 @@ export function EnvironmentCard() {
     <Card>
       <CardHeader>
         <CardTitle>运行环境</CardTitle>
-        <CardAction>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            disabled={refreshing}
-            onClick={() => void refresh()}
-          >
-            {refreshing ? "刷新中…" : failed ? "重试" : "刷新"}
-          </Button>
-        </CardAction>
       </CardHeader>
       <CardContent className="@container flex flex-col gap-4">
         {failed && (
@@ -56,7 +47,7 @@ export function EnvironmentCard() {
             className="grid gap-4 @xs:grid-cols-2"
             aria-label="运行环境"
             aria-live="polite"
-            aria-busy={refreshing}
+            aria-busy={busy}
           >
             {fields.map(({ label, value }) => (
               <Item key={label} className="min-w-0 p-0" role="listitem">

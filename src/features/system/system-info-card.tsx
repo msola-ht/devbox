@@ -1,5 +1,6 @@
+import type { ReactNode } from "react";
+
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Button } from "@/components/ui/button";
 import {
   Card,
   CardAction,
@@ -16,14 +17,18 @@ import {
 } from "@/components/ui/item";
 import { Skeleton } from "@/components/ui/skeleton";
 import { formatBytes } from "@/features/system/formatters";
-import { useSystemInfo } from "@/features/system/use-system-info";
+import type { SystemSnapshot } from "@/mygo";
 
-export function SystemInfoCard() {
-  const state = useSystemInfo();
-  const systemInfo = state.snapshot?.info;
-  const busy = state.pending !== null;
-  const loading = !state.snapshot && busy;
-  const pendingLabel = state.pending === "loading" ? "读取中…" : "刷新中…";
+interface SystemInfoCardProps {
+  snapshot: SystemSnapshot | null;
+  busy: boolean;
+  failed: boolean;
+  action: ReactNode;
+}
+
+export function SystemInfoCard({ snapshot, busy, failed, action }: SystemInfoCardProps) {
+  const systemInfo = snapshot?.info;
+  const loading = !snapshot && busy;
 
   const isAppleSilicon =
     systemInfo?.os === "darwin" && systemInfo.cpuModel.startsWith("Apple ");
@@ -56,29 +61,19 @@ export function SystemInfoCard() {
     <Card>
       <CardHeader>
         <CardTitle>系统信息</CardTitle>
-        <CardAction>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            disabled={busy}
-            onClick={() => void state.refresh()}
-          >
-            {busy ? pendingLabel : state.error ? "重试" : "刷新"}
-          </Button>
-        </CardAction>
+        <CardAction>{action}</CardAction>
       </CardHeader>
       <CardContent className="@container flex flex-col gap-4">
-        {state.error && (
+        {failed && (
           <Alert variant="destructive">
             <AlertDescription>
-              {state.snapshot
+              {snapshot
                 ? "刷新失败，当前显示上次采集的信息。"
-                : state.error}
+                : "暂时无法读取系统信息，请重试。"}
             </AlertDescription>
           </Alert>
         )}
-        {(state.snapshot || loading) && (
+        {(snapshot || loading) && (
           <ItemGroup
             className="grid @xs:grid-cols-2 @lg:grid-cols-3"
             aria-label={loading ? "正在读取系统信息" : "系统信息"}

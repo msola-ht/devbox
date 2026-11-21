@@ -10,6 +10,8 @@ import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { addressChoices, proxyModes, useProxySettings } from "@/features/settings/use-proxy-settings";
 import type { SystemProxyInfo, SystemProxyKind, SystemRoute } from "@/mygo";
 
+import { useSystemProxy } from "./use-system-proxy";
+
 const systemProxyNames: Record<SystemProxyKind, string> = {
   http: "HTTP",
   https: "HTTPS",
@@ -52,7 +54,8 @@ function systemDisplayEntries(info: SystemProxyInfo) {
   return rows;
 }
 
-function SystemProxyStatus({ info, error }: { info: SystemProxyInfo | null; error: string | null }) {
+function SystemProxyStatus() {
+  const { info, error } = useSystemProxy();
   const rows = info ? systemDisplayEntries(info) : [];
   return (
     <>
@@ -120,7 +123,7 @@ export function ProxySettingsCard() {
                     ))}
                   </ToggleGroup>
                 </Field>
-                {draft.mode === "system" && <SystemProxyStatus info={state.systemInfo} error={state.systemError} />}
+                {draft.mode === "system" && <SystemProxyStatus />}
                 {draft.mode === "manual" && (
                   <>
                     <Field>

@@ -4,15 +4,16 @@ import (
 	"context"
 	"fmt"
 	"net"
-	"os/exec"
 	"strings"
 	"time"
+
+	"devbox/internal/localcmd"
 )
 
 func readSystemSettings(ctx context.Context) ([]SystemEntry, bool, error) {
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
-	output, err := exec.CommandContext(ctx, "/usr/sbin/scutil", "--proxy").Output()
+	output, err := localcmd.Output(ctx, "/usr/sbin/scutil", []string{"--proxy"}, nil)
 	if err != nil {
 		if ctx.Err() == context.DeadlineExceeded {
 			return nil, true, fmt.Errorf("读取系统代理超时。")

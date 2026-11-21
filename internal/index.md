@@ -8,5 +8,6 @@ Go 本机业务模块，由 [main.go](../main.go) 注册为 MyGo 服务，前端
 - [proxy](proxy/index.md) 提供代理设置、路由解析和连接检查。
 - [configfile](configfile/index.md) 提供 Devbox 配置文件定位和 JSON 写入。
 - [localcmd](localcmd/index.md) 运行可取消的本机命令。
+- [readcache](readcache/index.md) 协调同项读取并复用会话结果。
 
 [项目架构](../ARCHITECTURE.md) · [前端索引](../src/index.md)

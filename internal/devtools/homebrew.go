@@ -5,11 +5,12 @@ import (
 	"runtime"
 )
 
-// DetectHomebrew checks Homebrew installations on macOS.
-func (Service) DetectHomebrew(ctx context.Context) ([]ToolDetection, error) {
-	if err := ctx.Err(); err != nil {
-		return nil, err
-	}
+// DetectHomebrew returns cached or newly detected Homebrew installations.
+func (s *Service) DetectHomebrew(ctx context.Context, refresh bool) ([]ToolDetection, error) {
+	return s.homebrew.Read(ctx, refresh, 0, detectHomebrew)
+}
+
+func detectHomebrew(ctx context.Context) ([]ToolDetection, error) {
 	if runtime.GOOS != "darwin" {
 		return []ToolDetection{{
 			Status:  statusUnsupported,

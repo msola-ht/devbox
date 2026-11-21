@@ -19,21 +19,21 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 
+import { useRefreshable } from "@/hooks/use-refreshable";
 import type { ToolDetection } from "@/mygo";
 
 import { ToolResult, ToolResultsDialog } from "./tool-results";
-import { useToolDetection } from "./use-tool-detection";
 
 interface ToolCardProps {
   name: string;
   description: string;
-  detect: Cancellable<[], ToolDetection[]>;
+  detect: Cancellable<[boolean], ToolDetection[]>;
 }
 
 export function ToolCard({ name, description, detect }: ToolCardProps) {
-  const { results, status, refresh } = useToolDetection(detect);
-  const detecting = status === "detecting";
-  const requestFailed = status === "request_failed";
+  const { data, pending, failed: requestFailed, refresh } = useRefreshable(detect);
+  const results = data ?? [];
+  const detecting = pending !== null;
   const allFailed =
     results.length > 0 && results.every(({ status }) => status === "failed");
   const action = requestFailed || allFailed ? "重试" : "刷新";

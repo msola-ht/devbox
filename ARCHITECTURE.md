@@ -14,7 +14,7 @@ Devbox 使用 MyGo 承载 React 界面和 Go 本机服务。前端负责展示�
 | [src/app.tsx](src/app.tsx) | 将合法路由映射为页面，组合应用外壳、导航和页面 |
 | [src/app-routes.ts](src/app-routes.ts) | 定义路由及标题，校验路径，保存与恢复上次页面 |
 | [src/features](src/features/index.md) | 按业务组织页面、组件、Hook 和业务内工具 |
-| [src/features/runtime-env](src/features/runtime-env/index.md) | 概览页的运行环境展示与刷新 |
+| [src/features/runtime-env](src/features/runtime-env/index.md) | 概览页的运行环境展示 |
 | [src/features/devtools](src/features/devtools/index.md) | 开发工具检测结果与刷新入口 |
 | [src/features/settings](src/features/settings/index.md) | 代理设置、配置恢复和连接检查 |
 | [src/components/ui](src/components/ui/index.md) | shadcn 基础组件，由业务组件组合使用 |
@@ -26,6 +26,7 @@ Devbox 使用 MyGo 承载 React 界面和 Go 本机服务。前端负责展示�
 | [internal/proxy](internal/proxy/index.md) | 代理配置、路由解析和连接检查 |
 | [internal/configfile](internal/configfile/index.md) | 配置文件定位和 JSON 写入 |
 | [internal/localcmd](internal/localcmd/index.md) | 本机短命令执行和子进程取消 |
+| [internal/readcache](internal/readcache/index.md) | 同项读取协调与会话内结果复用 |
 
 应用外壳通过属性接收侧栏、面包屑和页面内容。页面组合业务组件；导航组织入口与路由信息。新增业务沿用 `src/features/<业务>` 和 `internal/<业务>` 的组织方式。
 
@@ -44,19 +45,25 @@ flowchart TD
     Service --> Proxy[代理设置]
     System --> Collector[系统采集]
     System --> Snapshot[快照存储]
+    System --> ReadCache[会话读取缓存]
+    Environment --> ReadCache
+    DevTools --> ReadCache
+    Proxy --> ReadCache
     Proxy --> Network[路由解析与连接检查]
     Proxy --> Settings[代理配置存储]
     Snapshot --> ConfigFile[配置文件定位与 JSON 写入]
     Settings --> ConfigFile
     Collector --> Command[本机命令执行]
+    Environment --> Command
     DevTools --> Command
     Network --> Command
 ```
 
-- 页面与业务组件负责展示和用户操作；加载、刷新、取消和请求结果协调集中在业务 Hook。
+- 页面负责组合刷新入口，卡片负责展示。[use-refreshable.ts](src/hooks/use-refreshable.ts) 协调系统信息、运行环境和开发工具的首次读取、手动刷新与取消。设置表单管理独立的读取、写入和连接检查。
 - Go Service 组合具体采集与存储能力，负责业务顺序、超时和错误处理。被绑定服务的导出方法属于前端可调用契约。
 - 采集模块负责系统接口与平台命令，存储模块负责文件格式与读写，二者通过数据模型协作。
 - [localcmd](internal/localcmd/index.md) 执行短命令并管理子进程，业务模块指定命令、环境与截止时间。Windows 的显卡和磁盘采集共用 PowerShell JSON 查询入口。
+- Go 业务服务持有各自的缓存。[readcache](internal/readcache/index.md) 复用最近成功的读取结果，协调同一项的并发读取。业务服务决定有效期与主动刷新的语义。
 - 业务界面通过 shadcn 组件和内置变体组合。业务内的格式化和请求逻辑位于所属业务目录。
 - 当前采用具体函数组合。公共模块与接口的提取以实际复用、替换实现或依赖解耦需求为依据。
 
@@ -74,7 +81,7 @@ MyGo 接口生成会执行应用入口直到 `App.Run`。入口中保持服务�
 
 前端调用返回 Promise，通过 `await` 等待结果，界面仍可响应。每次 MyGo 绑定调用在独立 goroutine 中执行；Go 服务内部按业务顺序执行，只有独立工作才并行。
 
-当前系统信息流程采用普通请求与返回：读快照或采集一次后返回结果。GPU 和磁盘采集相互独立，内部并行执行。
+概览和开发工具的缓存读取与重新采集共用普通调用。概览的统一刷新发起独立请求，各卡片随各自的结果更新。Go 在系统信息采集中并行查询 GPU 和磁盘。
 
 普通调用是当前默认方式；Channel、Event 和后台任务在出现对应需求时按下表引入。
 
@@ -89,10 +96,10 @@ MyGo 接口生成会执行应用入口直到 `App.Run`。入口中保持服务�
 
 ### 取消、错误与并发
 
-- 前端请求使用 `AbortController`。系统信息、运行环境和开发工具通过 [use-latest-request.ts](src/hooks/use-latest-request.ts) 在新请求开始或组件卸载时取消旧请求。仅当前有效请求的结果更新界面。
-- Go 耗时调用接收 `context.Context`，并传给支持取消的系统接口、外部命令和网络操作。系统信息 Service 设置五秒采集超时。
+- 页面内的读取和连接检查使用 `AbortController`。刷新会取消同一项的旧请求，离开页面会取消关联读取。代理保存和恢复继续执行，完成后通过全局通知反馈。
+- Go 耗时调用接收 `context.Context`，并传给支持取消的系统接口、外部命令和网络操作。每项采集由业务服务设置期限，等待同项缓存读取时也可取消。
 - Go 返回的错误使前端 Promise 拒绝。Hook 将其转换为界面状态，组件展示提示并提供重试；取消的请求保持安静。
-- 多个 MyGo 调用可以同时执行。系统信息服务在锁外采集，用互斥锁协调内存快照更新和文件读写。文件使用临时文件写入后替换。
+- 多个 MyGo 调用可以同时执行。同项快照读取、重新采集和保存串行执行，不同数据项可并行。文件使用临时文件写入后替换。
 - `ProxyService` 持有代理配置，用互斥锁协调读取、保存与恢复。连接检查使用每次调用传入的表单草稿。
 
 ## 状态与持久化归属
@@ -100,10 +107,11 @@ MyGo 接口生成会执行应用入口直到 `App.Run`。入口中保持服务�
 | 数据 | 归属与保存方式 |
 | --- | --- |
 | 系统信息 | 本机采集为数据来源，`SystemService` 保留本次运行中最近一次采集结果，文件快照供下次启动读取 |
-| 当前展示的快照、刷新中和错误 | 业务 Hook 的 React 内存状态 |
-| 运行环境 | 概览页的 React 内存状态，每次进入或刷新时重新读取 |
-| 开发工具检测结果 | 开发工具页面的 React 内存状态，每次进入或刷新时重新读取 |
+| 当前展示的快照、刷新中和错误 | 查询 Hook 的 React 内存状态 |
+| 运行环境 | `EnvironmentService` 的会话内结果，由概览统一刷新 |
+| 开发工具检测结果 | `DevToolsService` 的会话内结果，按工具单独刷新 |
 | 代理设置 | `ProxyService` 和 `os.UserConfigDir()/devbox/proxy.json` |
+| 系统代理展示结果 | `ProxyService` 的 30 秒内存缓存 |
 | 代理表单草稿和连接检查状态 | 设置页面的 React 内存状态 |
 | 主题、侧栏展开状态、上次页面 | 前端 `localStorage`，分别由主题、外壳和路由模块管理 |
 
@@ -116,32 +124,26 @@ MyGo 接口生成会执行应用入口直到 `App.Run`。入口中保持服务�
 | 文件 | 职责 |
 | --- | --- |
 | [model.go](internal/systeminfo/model.go) | 定义 `SystemInfo`、`GPUInfo` 和带采集时间的 `SystemSnapshot` |
-| [service.go](internal/systeminfo/service.go) | 提供 `GetSnapshot`、`Refresh`，管理采集超时和内存快照，协调文件保存 |
+| [service.go](internal/systeminfo/service.go) | 提供 `Get`，协调内存、文件快照和重新采集 |
 | [collector.go](internal/systeminfo/collector.go) | 采集本机数据，协调独立的 GPU、磁盘查询 |
 | [snapshot_store.go](internal/systeminfo/snapshot_store.go) | 解析文件位置、读取和校验快照、写入并替换快照文件 |
 | `graphics_<平台>.go` | 通过对应平台的系统命令读取 GPU 信息 |
 | `storage_<平台>.go` | 读取物理磁盘总容量，按整块磁盘计数；此处的 storage 指磁盘采集 |
 
-采集对单项不可用采用部分结果：数值缺失为 `null`，GPU 列表缺失归一化为 `[]`。采集阶段收到取消或超时时返回错误，跳过后续保存。
+一次系统采集的预算为五秒，其中并行的 GPU 和磁盘查询各有三秒预算。可选项失败或超时仍保留其他字段。数值缺失为 `null`，GPU 列表缺失归一化为 `[]`。整体采集取消或超时时返回错误。
 
 ### 接口契约
 
 | 前端调用 | 成功返回 | 行为与错误 |
 | --- | --- | --- |
-| `SystemService.getSnapshot()` | `SystemSnapshot \| null` | 优先返回内存快照，其次读取文件。文件缺失或快照不兼容时返回 `null`，读取或解析失败时拒绝 |
-| `SystemService.refresh()` | `SystemSnapshot` | 重新采集并更新内存快照，再尝试写入文件。采集取消或超时时拒绝，文件保存失败记日志并返回本次结果 |
+| `SystemService.get(false)` | `SystemSnapshot` | 依次使用内存快照、兼容的文件快照和本机采集。文件读取失败时记录日志并采集 |
+| `SystemService.get(true)` | `SystemSnapshot` | 重新采集并更新快照。采集失败时保留已有快照，文件保存失败时记录日志并返回本次结果 |
 
-`SystemSnapshot` 包含 `info` 和 `collectedAt`。`collectedAt` 是采集完成的 UTC 时间，经生成接口表示为字符串。`refresh()` 的成功表示采集完成；文件保存采用尽力写入策略。
+`SystemSnapshot` 包含 `info` 和 `collectedAt`。`collectedAt` 是采集完成的 UTC 时间，经生成接口表示为字符串。
 
 ### 页面加载与刷新
 
-1. 进入概览时调用 `getSnapshot()`，有可用快照就直接展示。
-2. 快照缺失、不兼容或读取失败时调用 `refresh()` 采集，成功后尝试保存。读取失败记录警告。
-3. 刷新过程中保留已有数据，禁用刷新按钮。首次没有数据时在原位置显示 Skeleton。
-4. 刷新失败时保留已有快照并提示；首次加载失败时展示错误。用户可通过按钮重试。
-5. 开始新刷新或离开页面时取消当前请求。
-
-加载状态和请求协调集中在 [use-system-info.ts](src/features/system/use-system-info.ts)，展示集中在 [system-info-card.tsx](src/features/system/system-info-card.tsx)。刷新按钮触发实际采集并更新快照。
+[概览页](src/features/workspace/workspace-page.tsx) 分别读取系统信息和运行环境。一个“刷新概览”按钮触发两项独立查询，各卡片按各自的完成或失败状态更新。首次读取期间显示占位，刷新期间保留已有数据。离开页面时取消两项读取。
 
 ### 快照文件
 
@@ -151,7 +153,7 @@ MyGo 接口生成会执行应用入口直到 `App.Run`。入口中保持服务�
 
 ## 运行环境
 
-概览页在系统信息右侧显示[运行环境卡片](src/features/runtime-env/environment-card.tsx)，内容较窄时改为纵向排列。卡片通过 `EnvironmentService.get()` 读取用户主目录和默认登录 Shell。页面进入或手动刷新时读取，离开页面会取消当前请求。结果保存在页面内存中。
+概览页在系统信息右侧显示[运行环境卡片](src/features/runtime-env/environment-card.tsx)，内容较窄时改为纵向排列。`EnvironmentService.get(false)` 使用本次运行中的结果，首次读取时查询用户主目录和默认登录 Shell。刷新概览时调用 `get(true)` 重新读取。
 
 `homeDir` 由 Go 的 `os.UserHomeDir` 读取，桌面端取自进程的 `HOME` 或 `USERPROFILE`。在 macOS 和 Linux 上，`loginShell` 通过 UID 查询系统账号，分别调用 `/usr/bin/dscacheutil` 和 `/usr/bin/getent`。查询期限为两秒。主目录缺失、默认登录 Shell 查询失败或平台不适用时，对应字段为空，页面显示“暂不可用”。
 
@@ -159,13 +161,13 @@ MyGo 接口生成会执行应用入口直到 `App.Run`。入口中保持服务�
 
 ## 开发工具检测
 
-“开发工具”页面位于 `/tools`。Git、uv、Python 和 Homebrew 共用[检测卡片](src/features/devtools/tool-card.tsx)和 [use-tool-detection.ts](src/features/devtools/use-tool-detection.ts)，分别调用 `DevToolsService.detectGit()`、`detectUV()`、`detectPython()` 和 `detectHomebrew()`。进入页面时分别检测，用户可以单独刷新。开始同一工具的新请求或离开页面时取消旧请求，已取消的请求不会更新页面。
+“开发工具”页面位于 `/tools`。Git、uv、Python 和 Homebrew 共用[检测卡片](src/features/devtools/tool-card.tsx)，分别调用 `DevToolsService.detectGit(refresh)`、`detectUV(refresh)`、`detectPython(refresh)` 和 `detectHomebrew(refresh)`。进入页面时优先使用各工具最近一次检测结果，首次读取时执行检测。刷新图标只重新查询对应工具。开始同一工具的新请求或离开页面时取消旧请求。
 
 Go 在 [devtools](internal/devtools/index.md) 内共用 `ToolDetection`、应用进程的 `PATH` 查找和命令执行。[发现与编排](internal/devtools/discovery.go) 按 `PATH` 顺序收集绝对目录中的入口，再加入工具特有的路径。每项检测最多并行探测四个入口，按发现顺序返回 `ToolDetection[]`。单个入口的失败随结果返回。相同入口只探测一次，指向同一实际路径且版本相同的 Git、uv 和 Homebrew 成功结果只显示首次命中的一条，Python 按探测返回的解释器路径区分环境。
 
 卡片在工具名称旁显示首个可用结果的版本号，内容区域显示路径，全部不可用时显示首条结果。版本末尾的括号附注通过悬浮提示和安装详情查看。有多条检测结果时，刷新图标旁显示结果数量。点击数字打开弹窗，按检测顺序查看完整版本、路径和失败原因。
 
-每条命令的截止时间为五秒。取消时，Unix 终止命令所在的进程组，Windows 终止命令所在的 Job Object。Windows 后台命令使用无控制台窗口模式。成功结果中的路径来自实际执行的入口或解释器。
+每项检测有六秒预算，单条命令最多运行五秒。到达整项期限时保留已取得的结果，等待中的入口标为尚未探测。调用方取消时停止探测。Unix 终止命令所在的进程组，Windows 终止命令所在的 Job Object。Windows 后台命令使用无控制台窗口模式。成功结果中的路径来自实际执行的入口或解释器。
 
 - [Git](internal/devtools/git.go) 使用 `PATH` 中的绝对入口。在 macOS 上，入口解析为 `/usr/bin/git` 时，通过 `xcode-select --print-path` 查找当前开发工具目录，直接执行其中的 `usr/bin/git`，避免触发安装提示。
 - [uv](internal/devtools/uv.go) 使用 `PATH` 中的绝对入口并执行 `uv --version`。
@@ -176,21 +178,21 @@ Go 在 [devtools](internal/devtools/index.md) 内共用 `ToolDetection`、应用
 | --- | --- |
 | `available` | 命令成功并返回可识别的版本，包含 `path` 和 `version` |
 | `not_found` | 在查找范围内未找到入口，或从已知的 Python 启动别名未找到已安装解释器，包含 `message` |
-| `failed` | 入口无法使用、命令执行失败或超时、版本格式未识别，包含 `message` 及已知的 `path` |
+| `failed` | 入口无法使用、命令执行失败或超时、版本格式未识别，或探测因整项期限尚未开始，包含 `message` 及已知的 `path` |
 | `unsupported` | 当前平台不适用该项检测，包含 `message` |
 
-未找到入口或平台不适用时，数组包含一条对应状态。调用取消通过 MyGo 结束请求，检测结果仅保存在当前页面。刷新期间显示上次结果，收到新结果后更新卡片。请求失败时保留上次结果并提示重试。一次请求失败只影响对应卡片。
+未找到入口或平台不适用时，数组包含一条对应状态。检测结果保存在 Go 进程内。刷新期间显示上次结果，收到新结果后更新卡片。请求失败时保留上次结果并提示重试。一次请求失败只影响对应卡片。
 
 ## 代理设置
 
 设置页通过 [use-proxy-settings.ts](src/features/settings/use-proxy-settings.ts) 管理表单，使用 [proxy-settings-card.tsx](src/features/settings/proxy-settings-card.tsx) 展示代理模式。默认系统代理；手动模式选择 `127.0.0.1:7890`、`127.0.0.1:7897` 或自定义主机与端口，HTTP 和 SOCKS5 使用同一个地址。代理地址不包含认证信息。
 
-保存、恢复和连接检查通过浮动提示报告结果。系统代理信息刷新期间保留上次读取结果。系统配置和访问 `example.com` 的实际路由在同一个三列网格中展示。后端返回配置类型、路由状态、协议和去掉认证信息的地址。前端按这些字段合并重复项并生成中文标签。macOS 上有自动配置时单独列出实际路由。其他平台展示实际路由。
+保存、恢复和连接检查通过浮动提示报告结果。保存和恢复完成后反馈写入结果，切回设置页时等待进行中的写入结束再读配置。[系统代理状态](src/features/settings/use-system-proxy.ts) 在系统模式显示时及窗口聚焦时读取，Go 复用 30 秒内的展示结果。系统代理刷新期间保留上次读取结果。系统配置和访问 `example.com` 的实际路由在同一个三列网格中展示。后端返回配置类型、路由状态、协议和去掉认证信息的地址。前端按这些字段合并重复项并生成中文标签。macOS 上有自动配置时单独列出实际路由。其他平台展示实际路由。
 
 | 前端调用 | 行为 |
 | --- | --- |
 | `ProxyService.get()` | 返回已保存设置。文件缺失时返回默认值，文件内容无效或版本不兼容时返回 `null`，其他读取错误拒绝 |
-| `ProxyService.getSystemInfo()` | 读取系统配置和示例地址的实际路由。取消可终止 macOS 配置查询和子进程路由查询。进程内的 MyGo 平台解析会继续到返回 |
+| `ProxyService.getSystemInfo()` | 返回 30 秒内的结果，过期时读取系统配置和示例路由。取消可终止 macOS 配置查询和子进程路由查询。进程内的 MyGo 平台解析会继续到返回 |
 | `ProxyService.save(settings)` | 验证并保存设置，成功后更新服务状态。非手动模式保留上次的手动地址 |
 | `ProxyService.reset()` | 用系统模式和 `127.0.0.1:7890` 替换设置文件，成功后返回默认设置 |
 | `ProxyService.check(settings)` | 用草稿对 `https://example.com/` 发起 HEAD 请求，成功时返回 `void`。请求使用十秒截止时间，可取消手动探测、子进程路由查询和网络请求 |

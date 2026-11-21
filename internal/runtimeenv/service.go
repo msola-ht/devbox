@@ -3,15 +3,19 @@ package runtimeenv
 import (
 	"context"
 	"os"
-	"os/exec"
 	"runtime"
 	"strconv"
 	"strings"
 	"time"
+
+	"devbox/internal/localcmd"
+	"devbox/internal/readcache"
 )
 
 // Service exposes read-only information about the app's runtime environment.
-type Service struct{}
+type Service struct {
+	environment readcache.Cache[EnvironmentInfo]
+}
 
 // EnvironmentInfo describes the user's home directory and account shell.
 type EnvironmentInfo struct {
@@ -19,8 +23,12 @@ type EnvironmentInfo struct {
 	HomeDir    string `json:"homeDir"`
 }
 
-// Get reads the environment and the system account's login shell.
-func (Service) Get(ctx context.Context) (EnvironmentInfo, error) {
+// Get returns the last environment reading or reads it from the system.
+func (s *Service) Get(ctx context.Context, refresh bool) (EnvironmentInfo, error) {
+	return s.environment.Read(ctx, refresh, 0, readEnvironment)
+}
+
+func readEnvironment(ctx context.Context) (EnvironmentInfo, error) {
 	homeDir, _ := os.UserHomeDir()
 	loginShell := readLoginShell(ctx)
 	if err := ctx.Err(); err != nil {
@@ -39,7 +47,7 @@ func readLoginShell(ctx context.Context) string {
 	uid := strconv.Itoa(os.Getuid())
 	switch runtime.GOOS {
 	case "darwin":
-		output, err := exec.CommandContext(ctx, "/usr/bin/dscacheutil", "-q", "user", "-a", "uid", uid).Output()
+		output, err := localcmd.Output(ctx, "/usr/bin/dscacheutil", []string{"-q", "user", "-a", "uid", uid}, nil)
 		if err != nil {
 			return ""
 		}
@@ -49,7 +57,7 @@ func readLoginShell(ctx context.Context) string {
 			}
 		}
 	case "linux":
-		output, err := exec.CommandContext(ctx, "/usr/bin/getent", "passwd", uid).Output()
+		output, err := localcmd.Output(ctx, "/usr/bin/getent", []string{"passwd", uid}, nil)
 		if err != nil {
 			return ""
 		}

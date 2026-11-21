@@ -9,8 +9,12 @@ import (
 	"strings"
 )
 
-// DetectPython reports the Python 3 interpreters found in the app's PATH.
-func (Service) DetectPython(ctx context.Context) ([]ToolDetection, error) {
+// DetectPython returns cached or newly detected Python 3 interpreters.
+func (s *Service) DetectPython(ctx context.Context, refresh bool) ([]ToolDetection, error) {
+	return s.python.Read(ctx, refresh, 0, detectPython)
+}
+
+func detectPython(ctx context.Context) ([]ToolDetection, error) {
 	name := "python3"
 	if runtime.GOOS == "windows" {
 		name = "python.exe"

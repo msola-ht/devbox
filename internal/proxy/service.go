@@ -4,18 +4,25 @@ import (
 	"context"
 	"errors"
 	"sync"
+	"time"
+
+	"devbox/internal/readcache"
 )
 
 // Service owns the proxy configuration and exposes the settings operations.
 type Service struct {
 	mu       sync.Mutex
 	settings *Settings
+	system   readcache.Cache[SystemProxyInfo]
 }
 
 // Get returns the current settings, or null if the file needs to be reset.
-func (s *Service) Get() (*Settings, error) {
+func (s *Service) Get(ctx context.Context) (*Settings, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	settings, err := s.load()
 	if errors.Is(err, errInvalidSettings) {
 		return nil, nil
@@ -27,8 +34,8 @@ func (s *Service) Get() (*Settings, error) {
 }
 
 // GetSystemInfo returns the system proxy settings and current routes.
-func (*Service) GetSystemInfo(ctx context.Context) (SystemProxyInfo, error) {
-	return systemInfo(ctx)
+func (s *Service) GetSystemInfo(ctx context.Context) (SystemProxyInfo, error) {
+	return s.system.Read(ctx, false, 30*time.Second, systemInfo)
 }
 
 // Save validates and persists settings before making them effective.

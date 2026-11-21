@@ -3,45 +3,48 @@ package systeminfo
 import (
 	"context"
 	"log"
-	"sync"
 	"time"
+
+	"devbox/internal/readcache"
 )
 
 // Service coordinates system information collection and snapshot persistence.
 type Service struct {
-	mu     sync.Mutex
-	latest *SystemSnapshot
+	snapshots readcache.Cache[SystemSnapshot]
 }
 
-// GetSnapshot returns the latest in-memory or saved snapshot.
-// It returns null when no compatible snapshot exists.
-func (s *Service) GetSnapshot() (*SystemSnapshot, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if s.latest != nil {
-		return s.latest, nil
-	}
-	return loadSnapshot()
+// Get returns a remembered snapshot or collects fresh system information.
+func (s *Service) Get(ctx context.Context, refresh bool) (SystemSnapshot, error) {
+	return s.snapshots.Read(ctx, refresh, 0, func(ctx context.Context) (SystemSnapshot, error) {
+		if !refresh {
+			snapshot, err := loadSnapshot()
+			if canceled := ctx.Err(); canceled != nil {
+				return SystemSnapshot{}, canceled
+			}
+			if err != nil {
+				log.Printf("systeminfo: load snapshot: %v", err)
+			}
+			if snapshot != nil {
+				return *snapshot, nil
+			}
+		}
+		return collectSnapshot(ctx)
+	})
 }
 
-// Refresh collects fresh information within five seconds and remembers it.
-// Saving the snapshot to disk is best effort.
-func (s *Service) Refresh(ctx context.Context) (SystemSnapshot, error) {
-	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+func collectSnapshot(ctx context.Context) (SystemSnapshot, error) {
+	collectCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 
-	info, err := collect(ctx)
+	info, err := collect(collectCtx)
 	if err != nil {
 		return SystemSnapshot{}, err
 	}
 	snapshot := SystemSnapshot{Info: info, CollectedAt: time.Now().UTC()}
 
-	s.mu.Lock()
-	defer s.mu.Unlock()
 	if err := ctx.Err(); err != nil {
 		return SystemSnapshot{}, err
 	}
-	s.latest = &snapshot
 	if err := saveSnapshot(snapshot); err != nil {
 		log.Printf("systeminfo: save snapshot: %v", err)
 	}

@@ -3,13 +3,14 @@ package systeminfo
 import (
 	"context"
 	"encoding/xml"
-	"os/exec"
 	"strconv"
 	"strings"
+
+	"devbox/internal/localcmd"
 )
 
 func physicalDiskCapacity(ctx context.Context) *uint64 {
-	output, err := exec.CommandContext(ctx, "/usr/sbin/diskutil", "list", "-plist", "physical").Output()
+	output, err := localcmd.Output(ctx, "/usr/sbin/diskutil", []string{"list", "-plist", "physical"}, nil)
 	if err != nil {
 		return nil
 	}

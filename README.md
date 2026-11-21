@@ -13,4 +13,4 @@ bun install
 bun run dev
 ```
 
-[产品设计](DESIGN.md) · [当前架构](ARCHITECTURE.md) · [项目规则](AGENTS.md)
+[项目规则](AGENTS.md) · [当前架构](ARCHITECTURE.md) · [产品设计](DESIGN.md) · [代理设计](PROXY_DESIGN.md)

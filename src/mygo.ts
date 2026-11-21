@@ -87,22 +87,14 @@ export type ToolStatus = "available" | "not_found" | "failed" | "unsupported";
 
 /** Service coordinates system information collection and snapshot persistence. */
 export const SystemService = {
-  /**
-   * GetSnapshot returns the latest in-memory or saved snapshot.
-   * It returns null when no compatible snapshot exists.
-   */
-  getSnapshot: bind<[], SystemSnapshot | null>("SystemService.GetSnapshot", () => []),
-  /**
-   * Refresh collects fresh information within five seconds and remembers it.
-   * Saving the snapshot to disk is best effort.
-   */
-  refresh: bind<[], SystemSnapshot>("SystemService.Refresh", () => []),
+  /** Get returns a remembered snapshot or collects fresh system information. */
+  get: bind<[boolean], SystemSnapshot>("SystemService.Get", (refresh: boolean) => [refresh]),
 } as const;
 
 /** Service exposes read-only information about the app's runtime environment. */
 export const EnvironmentService = {
-  /** Get reads the environment and the system account's login shell. */
-  get: bind<[], EnvironmentInfo>("EnvironmentService.Get", () => []),
+  /** Get returns the last environment reading or reads it from the system. */
+  get: bind<[boolean], EnvironmentInfo>("EnvironmentService.Get", (refresh: boolean) => [refresh]),
 } as const;
 
 /** Service owns the proxy configuration and exposes the settings operations. */
@@ -121,12 +113,12 @@ export const ProxyService = {
 
 /** Service exposes local developer tool detection. */
 export const DevToolsService = {
-  /** DetectGit checks the Git executables found in the app's PATH. */
-  detectGit: bind<[], ToolDetection[]>("DevToolsService.DetectGit", () => []),
-  /** DetectHomebrew checks Homebrew installations on macOS. */
-  detectHomebrew: bind<[], ToolDetection[]>("DevToolsService.DetectHomebrew", () => []),
-  /** DetectPython reports the Python 3 interpreters found in the app's PATH. */
-  detectPython: bind<[], ToolDetection[]>("DevToolsService.DetectPython", () => []),
-  /** DetectUV checks the uv executables found in the app's PATH. */
-  detectUV: bind<[], ToolDetection[]>("DevToolsService.DetectUV", () => []),
+  /** DetectGit returns cached or newly detected Git executables. */
+  detectGit: bind<[boolean], ToolDetection[]>("DevToolsService.DetectGit", (refresh: boolean) => [refresh]),
+  /** DetectHomebrew returns cached or newly detected Homebrew installations. */
+  detectHomebrew: bind<[boolean], ToolDetection[]>("DevToolsService.DetectHomebrew", (refresh: boolean) => [refresh]),
+  /** DetectPython returns cached or newly detected Python 3 interpreters. */
+  detectPython: bind<[boolean], ToolDetection[]>("DevToolsService.DetectPython", (refresh: boolean) => [refresh]),
+  /** DetectUV returns cached or newly detected uv executables. */
+  detectUV: bind<[boolean], ToolDetection[]>("DevToolsService.DetectUV", (refresh: boolean) => [refresh]),
 } as const;

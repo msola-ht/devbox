@@ -3,12 +3,13 @@ package systeminfo
 import (
 	"context"
 	"encoding/json"
-	"os/exec"
 	"strconv"
+
+	"devbox/internal/localcmd"
 )
 
 func physicalDiskCapacity(ctx context.Context) *uint64 {
-	output, err := exec.CommandContext(ctx, "lsblk", "--bytes", "--json", "--nodeps", "--output", "TYPE,SIZE").Output()
+	output, err := localcmd.Output(ctx, "lsblk", []string{"--bytes", "--json", "--nodeps", "--output", "TYPE,SIZE"}, nil)
 	if err != nil {
 		return nil
 	}

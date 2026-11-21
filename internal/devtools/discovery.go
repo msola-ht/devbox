@@ -8,6 +8,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"sync"
+	"time"
 )
 
 type toolCandidate struct {
@@ -21,8 +22,10 @@ func detectTools(
 	probe func(context.Context, string) ToolDetection,
 	extraPaths ...string,
 ) ([]ToolDetection, error) {
-	candidates := findToolCandidates(ctx, name, extraPaths)
-	if err := ctx.Err(); err != nil {
+	probeCtx, cancel := context.WithTimeout(ctx, 6*time.Second)
+	defer cancel()
+	candidates := findToolCandidates(probeCtx, name, extraPaths)
+	if err := probeCtx.Err(); err != nil {
 		return nil, err
 	}
 	if len(candidates) == 0 {
@@ -34,12 +37,12 @@ func detectTools(
 	var probes sync.WaitGroup
 	for worker := range workers {
 		probes.Go(func() {
-			for index := worker; index < len(candidates) && ctx.Err() == nil; index += workers {
+			for index := worker; index < len(candidates) && probeCtx.Err() == nil; index += workers {
 				candidate := candidates[index]
 				if candidate.err != nil {
 					results[index] = pathFailure(candidate.path, candidate.err)
 				} else {
-					results[index] = probe(ctx, candidate.path)
+					results[index] = probe(probeCtx, candidate.path)
 				}
 			}
 		})
@@ -47,6 +50,14 @@ func detectTools(
 	probes.Wait()
 	if err := ctx.Err(); err != nil {
 		return nil, err
+	}
+	for index, result := range results {
+		if result.Status == "" {
+			results[index] = ToolDetection{
+				Status: statusFailed, Path: candidates[index].path,
+				Message: "检测已达时间上限，尚未探测此入口。",
+			}
+		}
 	}
 	return uniqueToolResults(results), nil
 }
