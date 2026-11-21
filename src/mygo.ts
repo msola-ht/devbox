@@ -72,13 +72,17 @@ export interface SystemSnapshot {
   collectedAt: string;
 }
 
-/** ToolDetection reports availability, executable path, version, and diagnostics. */
+/** ToolDetection reports availability and details of a local tool installation. */
 export interface ToolDetection {
   status: ToolStatus;
   path: string;
   version: string;
+  source: ToolSource;
   message: string;
 }
+
+/** ToolSource identifies the recognized provider of a detected executable. */
+export type ToolSource = "" | "unknown" | "system" | "apple_developer_tools" | "homebrew" | "fnm" | "nvm" | "nvm_windows" | "uv" | "corepack";
 
 /** ToolStatus describes the outcome of detecting a tool. */
 export type ToolStatus = "available" | "not_found" | "failed" | "unsupported";
@@ -113,12 +117,28 @@ export const ProxyService = {
 
 /** Service exposes local developer tool detection. */
 export const DevToolsService = {
+  /** DetectGH returns cached or newly detected GitHub CLI executables. */
+  detectGH: bind<[boolean], ToolDetection[]>("DevToolsService.DetectGH", (refresh: boolean) => [refresh]),
   /** DetectGit returns cached or newly detected Git executables. */
   detectGit: bind<[boolean], ToolDetection[]>("DevToolsService.DetectGit", (refresh: boolean) => [refresh]),
   /** DetectHomebrew returns cached or newly detected Homebrew installations. */
   detectHomebrew: bind<[boolean], ToolDetection[]>("DevToolsService.DetectHomebrew", (refresh: boolean) => [refresh]),
+  /** DetectJQ returns cached or newly detected jq executables. */
+  detectJQ: bind<[boolean], ToolDetection[]>("DevToolsService.DetectJQ", (refresh: boolean) => [refresh]),
+  /** DetectNPM returns cached or newly detected npm installations. */
+  detectNPM: bind<[boolean], ToolDetection[]>("DevToolsService.DetectNPM", (refresh: boolean) => [refresh]),
+  /** DetectNode returns cached or newly detected Node.js installations. */
+  detectNode: bind<[boolean], ToolDetection[]>("DevToolsService.DetectNode", (refresh: boolean) => [refresh]),
+  /** DetectPNPM returns cached or newly detected pnpm installations. */
+  detectPNPM: bind<[boolean], ToolDetection[]>("DevToolsService.DetectPNPM", (refresh: boolean) => [refresh]),
+  /** DetectPowerShell returns cached or newly detected PowerShell installations on Windows. */
+  detectPowerShell: bind<[boolean], ToolDetection[]>("DevToolsService.DetectPowerShell", (refresh: boolean) => [refresh]),
   /** DetectPython returns cached or newly detected Python 3 interpreters. */
   detectPython: bind<[boolean], ToolDetection[]>("DevToolsService.DetectPython", (refresh: boolean) => [refresh]),
+  /** DetectRG returns cached or newly detected ripgrep executables. */
+  detectRG: bind<[boolean], ToolDetection[]>("DevToolsService.DetectRG", (refresh: boolean) => [refresh]),
   /** DetectUV returns cached or newly detected uv executables. */
   detectUV: bind<[boolean], ToolDetection[]>("DevToolsService.DetectUV", (refresh: boolean) => [refresh]),
+  /** DetectZsh returns cached or newly detected Zsh executables on macOS and Linux. */
+  detectZsh: bind<[boolean], ToolDetection[]>("DevToolsService.DetectZsh", (refresh: boolean) => [refresh]),
 } as const;

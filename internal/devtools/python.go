@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -58,7 +59,7 @@ func resolvePython(ctx context.Context, path string) (string, error) {
 }
 
 func probePython(ctx context.Context, path string) ToolDetection {
-	const script = `import json, sys; print(json.dumps({"version": sys.version.split()[0], "path": sys.executable}))`
+	const script = `import json, sys; print(json.dumps({"version": sys.version.split()[0], "path": sys.executable, "basePath": getattr(sys, "_base_executable", None)}))`
 	args := []string{"-I", "-B", "-S", "-c", script}
 	var environment []string
 	if runtime.GOOS == "windows" {
@@ -70,8 +71,9 @@ func probePython(ctx context.Context, path string) ToolDetection {
 	}
 
 	var interpreter struct {
-		Version string `json:"version"`
-		Path    string `json:"path"`
+		Version  string `json:"version"`
+		Path     string `json:"path"`
+		BasePath string `json:"basePath"`
 	}
 	if err := json.Unmarshal(output, &interpreter); err != nil ||
 		!strings.HasPrefix(interpreter.Version, "3.") || !filepath.IsAbs(interpreter.Path) {
@@ -85,5 +87,38 @@ func probePython(ctx context.Context, path string) ToolDetection {
 		Status:  statusAvailable,
 		Path:    interpreter.Path,
 		Version: interpreter.Version,
+		Source:  pythonSource(interpreter.Path, interpreter.BasePath),
 	}
+}
+
+func pythonSource(path, basePath string) ToolSource {
+	// Attribute the base runtime while keeping virtual environments distinct.
+	if filepath.IsAbs(basePath) {
+		path = basePath
+	}
+	resolved, err := filepath.EvalSymlinks(path)
+	if err != nil {
+		return sourceUnchecked
+	}
+	if source := sourceForExecutable(resolved); source != sourceUnchecked {
+		return source
+	}
+
+	paths := []string{os.Getenv("UV_PYTHON_INSTALL_DIR")}
+	if runtime.GOOS == "windows" {
+		paths = append(paths, filepath.Join(os.Getenv("APPDATA"), "uv", "data", "python"))
+	} else {
+		home, _ := os.UserHomeDir()
+		paths = append(paths, filepath.Join(os.Getenv("XDG_DATA_HOME"), "uv", "python"),
+			filepath.Join(home, ".local", "share", "uv", "python"))
+	}
+	for _, dir := range paths {
+		if filepath.IsAbs(dir) {
+			root, err := filepath.EvalSymlinks(dir)
+			if err == nil && withinDirectory(resolved, root) {
+				return sourceUV
+			}
+		}
+	}
+	return sourceUnchecked
 }

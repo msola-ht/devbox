@@ -15,7 +15,7 @@ Devbox 使用 MyGo 承载 React 界面和 Go 本机服务。前端负责展示�
 | [src/app-routes.ts](src/app-routes.ts) | 定义路由及标题，校验路径，保存与恢复上次页面 |
 | [src/features](src/features/index.md) | 按业务组织页面、组件、Hook 和业务内工具 |
 | [src/features/runtime-env](src/features/runtime-env/index.md) | 概览页的运行环境展示 |
-| [src/features/devtools](src/features/devtools/index.md) | 开发工具检测结果与刷新入口 |
+| [src/features/devtools](src/features/devtools/index.md) | 工具目录、检测卡片与安装详情 |
 | [src/features/settings](src/features/settings/index.md) | 代理设置、配置恢复和连接检查 |
 | [src/components/ui](src/components/ui/index.md) | shadcn 基础组件，由业务组件组合使用 |
 | [src/lib](src/lib/index.md) | 已被复用的通用前端工具 |
@@ -161,18 +161,35 @@ MyGo 接口生成会执行应用入口直到 `App.Run`。入口中保持服务�
 
 ## 开发工具检测
 
-“开发工具”页面位于 `/tools`。Git、uv、Python 和 Homebrew 共用[检测卡片](src/features/devtools/tool-card.tsx)，分别调用 `DevToolsService.detectGit(refresh)`、`detectUV(refresh)`、`detectPython(refresh)` 和 `detectHomebrew(refresh)`。进入页面时优先使用各工具最近一次检测结果，首次读取时执行检测。刷新图标只重新查询对应工具。开始同一工具的新请求或离开页面时取消旧请求。
+前端的[工具目录](src/features/devtools/tool-catalog.ts) 定义开发工具页的分组、工具标识、名称、检测方法和展示范围。分组按主要用途和语言生态划分，平台限制按工具条目声明。前端通过 MyGo 运行时读取平台，隐藏无适用工具的分组。Go 检测服务负责平台校验和命令定位。
 
-Go 在 [devtools](internal/devtools/index.md) 内共用 `ToolDetection`、应用进程的 `PATH` 查找和命令执行。[发现与编排](internal/devtools/discovery.go) 按 `PATH` 顺序收集绝对目录中的入口，再加入工具特有的路径。每项检测最多并行探测四个入口，按发现顺序返回 `ToolDetection[]`。单个入口的失败随结果返回。相同入口只探测一次，指向同一实际路径且版本相同的 Git、uv 和 Homebrew 成功结果只显示首次命中的一条，Python 按探测返回的解释器路径区分环境。
+| 开发工具分组 | 当前工具 |
+| --- | --- |
+| 系统包管理器 | macOS 上的 Homebrew |
+| 基础工具 | Git、GitHub CLI、jq、ripgrep |
+| Python | Python、uv |
+| JavaScript | Node.js、npm、pnpm |
+| Shell 与脚本 | macOS 和 Linux 上的 Zsh，Windows 上的 PowerShell |
 
-卡片在工具名称旁显示首个可用结果的版本号，内容区域显示路径，全部不可用时显示首条结果。版本末尾的括号附注通过悬浮提示和安装详情查看。有多条检测结果时，刷新图标旁显示结果数量。点击数字打开弹窗，按检测顺序查看完整版本、路径和失败原因。
+开发工具按组展示卡片，每组每排最多四张，卡片平分所在行的可用宽度。系统包管理器和 Shell 与脚本同时适用时在页面顶部并排，内容区较窄时上下排列。[工具卡片](src/features/devtools/tool-card.tsx) 通过 [DevToolsService](src/mygo.ts) 中各自的检测方法读取结果。进入页面时优先使用最近一次检测结果，首次读取时执行检测。卡片的刷新图标只重新查询对应工具。开始同一工具的新请求或离开页面时取消旧请求。
+
+Go 在 [devtools](internal/devtools/index.md) 内共用 `ToolDetection`、应用进程的 `PATH` 查找和命令执行。[发现与编排](internal/devtools/discovery.go) 按 `PATH` 顺序收集绝对目录中的入口，再加入工具特有的路径。每项检测最多并行探测四个入口，按发现顺序返回 `ToolDetection[]`。单个入口的失败随结果返回。相同入口只探测一次，指向同一实际路径且版本相同的成功结果只显示首次命中的一条。Python 按探测返回的解释器路径区分环境。
+
+卡片标题行显示工具名称、首个可用版本和操作。名称提示包含工具说明和完整版本。内容行并排显示已识别的安装来源和路径，路径超出可用宽度时截断，完整路径可通过提示查看。全部不可用时显示首条结果，未找到时显示一条提示。有多条检测结果时，刷新图标旁显示结果数量。点击数字打开安装详情，按检测顺序展示完整版本、路径、来源和失败原因。
+
+Go 根据已知位置及解析符号链接后的实际路径识别来源。[通用来源判定](internal/devtools/source.go) 支持 macOS 系统命令、Apple 开发工具和 Homebrew 默认 Cellar。Windows PowerShell 的系统入口标注为系统自带。Python 按基础解释器归属标注来源，虚拟环境的路径与独立结果保留。Node.js 无法归属时显示「未知」，其他工具在来源字段为空时省略来源。
 
 每项检测有六秒预算，单条命令最多运行五秒。到达整项期限时保留已取得的结果，等待中的入口标为尚未探测。调用方取消时停止探测。Unix 终止命令所在的进程组，Windows 终止命令所在的 Job Object。Windows 后台命令使用无控制台窗口模式。成功结果中的路径来自实际执行的入口或解释器。
 
 - [Git](internal/devtools/git.go) 使用 `PATH` 中的绝对入口。在 macOS 上，入口解析为 `/usr/bin/git` 时，通过 `xcode-select --print-path` 查找当前开发工具目录，直接执行其中的 `usr/bin/git`，避免触发安装提示。
+- [jq、ripgrep 和 GitHub CLI](internal/devtools/utilities.go) 分别查找 `jq`、`rg` 和 `gh` 并执行 `--version`。macOS 上还检查 `/opt/homebrew/bin` 和 `/usr/local/bin`。GitHub CLI 检测关闭版本更新检查。
+- [Zsh](internal/devtools/zsh.go) 在 macOS 和 Linux 上执行 `zsh --version`。应用 `PATH` 之后检查 macOS 的常用包管理器路径以及 `/bin/zsh` 和 `/usr/bin/zsh`。
+- [PowerShell](internal/devtools/powershell.go) 在 Windows 上查找 `pwsh`，并检查 PowerShell 7 和系统自带 Windows PowerShell 的默认安装路径。探测在不加载用户配置的非交互会话中读取 `$PSVersionTable.PSVersion`。
 - [uv](internal/devtools/uv.go) 使用 `PATH` 中的绝对入口并执行 `uv --version`。
-- [Python](internal/devtools/python.go) 在 macOS 和 Linux 上查找 `python3`，在 Windows 上查找 `python.exe`。macOS 的 `/usr/bin/python3` 与 Git 共用 Apple 开发工具目录查询。Windows 的应用执行别名通过 `pymanager.exe list --one --format=json` 查询已安装解释器。探测子进程在隔离模式中读取 Python 3 版本和 `sys.executable`，Windows 探测为子进程关闭安装管理器的自动安装选项。
+- [Python](internal/devtools/python.go) 在 macOS 和 Linux 上查找 `python3`，在 Windows 上查找 `python.exe`。macOS 的 `/usr/bin/python3` 与 Git 共用 Apple 开发工具目录查询。Windows 的应用执行别名通过 `pymanager.exe list --one --format=json` 查询已安装解释器，探测为子进程关闭自动安装选项。探测在隔离模式中读取版本、当前解释器路径及可用的基础解释器路径，并识别 uv 的默认数据目录或 `UV_PYTHON_INSTALL_DIR` 中的解释器。
 - [Homebrew](internal/devtools/homebrew.go) 在 macOS 上检测。`PATH` 入口之后，按应用进程架构检查 `/opt/homebrew/bin/brew` 和 `/usr/local/bin/brew`。
+- [Node.js](internal/devtools/node.go) 与 npm 共用已知版本目录的查找和来源识别。先查应用 `PATH`，再查 macOS 常用安装路径以及 Homebrew 默认 Cellar 的 `node` 与 `node@*`、fnm 的 `node-versions`、nvm 的 `versions/node` 和 nvm-windows 安装目录。同一实际路径和版本经多个入口命中时，保留最先发现的入口。
+- [npm 和 pnpm](internal/devtools/javascript.go) 执行 `--version`，优先使用入口同目录下的 Node.js。pnpm 还检查 macOS 常用安装路径和绝对路径 `PNPM_HOME`。解析到 Corepack 脚本的入口标注来源为 Corepack，探测使用本地缓存的默认版本。pnpm 探测关闭按项目配置切换版本。Windows 上通过系统 `cmd.exe` 执行 `npm.cmd` 和 `pnpm.cmd` 等批处理入口，其子进程纳入同一个 Job Object。
 
 | `status` | 含义 |
 | --- | --- |
@@ -181,7 +198,7 @@ Go 在 [devtools](internal/devtools/index.md) 内共用 `ToolDetection`、应用
 | `failed` | 入口无法使用、命令执行失败或超时、版本格式未识别，或探测因整项期限尚未开始，包含 `message` 及已知的 `path` |
 | `unsupported` | 当前平台不适用该项检测，包含 `message` |
 
-未找到入口或平台不适用时，数组包含一条对应状态。检测结果保存在 Go 进程内。刷新期间显示上次结果，收到新结果后更新卡片。请求失败时保留上次结果并提示重试。一次请求失败只影响对应卡片。
+未找到入口或平台不适用时，数组包含一条对应状态。检测结果保存在 Go 进程内。刷新期间显示上次结果，收到新结果后更新对应卡片。请求失败时保留上次结果并提示重试。一次请求失败只影响对应卡片。
 
 ## 代理设置
 

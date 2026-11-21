@@ -7,7 +7,6 @@ import {
   Card,
   CardAction,
   CardContent,
-  CardDescription,
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
@@ -46,23 +45,19 @@ export function ToolCard({ name, description, detect }: ToolCardProps) {
   return (
     <Card>
       <CardHeader>
-        <CardTitle
-          className="flex flex-wrap items-baseline gap-x-1.5 wrap-anywhere"
-          aria-live="polite"
-        >
-          <span>{name}</span>
-          {shortVersion !== version ? (
-            <Tooltip>
-              <TooltipTrigger render={<span tabIndex={0} />}>
-                {shortVersion}
-              </TooltipTrigger>
-              <TooltipContent className="wrap-anywhere">{version}</TooltipContent>
-            </Tooltip>
-          ) : (
-            shortVersion
-          )}
+        <CardTitle className="min-w-0" aria-live="polite">
+          <Tooltip>
+            <TooltipTrigger render={<span className="block truncate" tabIndex={0} />}>
+              {shortVersion ? `${name} ${shortVersion}` : name}
+            </TooltipTrigger>
+            <TooltipContent className="wrap-anywhere">
+              <div className="flex flex-col">
+                <span>{description}</span>
+                {version && <span>{version}</span>}
+              </div>
+            </TooltipContent>
+          </Tooltip>
         </CardTitle>
-        <CardDescription className="wrap-anywhere">{description}</CardDescription>
         {summary?.status !== "unsupported" && (
           <CardAction className="flex items-center gap-1">
             {results.length > 1 && (

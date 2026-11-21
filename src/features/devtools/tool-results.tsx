@@ -15,12 +15,24 @@ import {
   ItemTitle,
 } from "@/components/ui/item";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import type { ToolDetection, ToolStatus } from "@/mygo";
+import type { ToolDetection, ToolSource, ToolStatus } from "@/mygo";
 
 const statusLabels: Record<Exclude<ToolStatus, "available">, string> = {
   not_found: "当前环境未找到",
   unsupported: "当前平台不适用",
   failed: "检测失败",
+};
+
+const sourceLabels: Record<Exclude<ToolSource, "">, string> = {
+  unknown: "未知",
+  system: "系统自带",
+  apple_developer_tools: "Apple 开发工具",
+  homebrew: "Homebrew",
+  fnm: "fnm",
+  nvm: "nvm",
+  nvm_windows: "nvm-windows",
+  uv: "uv",
+  corepack: "Corepack",
 };
 
 export function ToolResultsDialog({
@@ -73,15 +85,35 @@ export function ToolResult({
   result: ToolDetection;
   compact?: boolean;
 }) {
-  const title =
+  if (compact && result.status === "not_found") {
+    if (!result.path) return <span>{statusLabels.not_found}</span>;
+    return (
+      <Tooltip>
+        <TooltipTrigger render={<span tabIndex={0} />}>
+          {statusLabels.not_found}
+        </TooltipTrigger>
+        <TooltipContent>
+          <div className="flex min-w-0 flex-col wrap-anywhere">
+            {result.message && <span>{result.message}</span>}
+            <code>{result.path}</code>
+          </div>
+        </TooltipContent>
+      </Tooltip>
+    );
+  }
+
+  let title =
     result.status === "available"
-      ? compact ? "" : result.version
+      ? result.version
       : statusLabels[result.status];
+  if (result.status === "not_found" && result.path && result.message) {
+    title = result.message;
+  }
   const role = compact ? undefined : "listitem";
   const path = result.path && (
     compact ? (
       <Tooltip>
-        <TooltipTrigger render={<code className="block truncate" tabIndex={0} />}>
+        <TooltipTrigger render={<code className="block min-w-0 truncate" tabIndex={0} />}>
           {result.path}
         </TooltipTrigger>
         <TooltipContent>
@@ -92,6 +124,21 @@ export function ToolResult({
       <code className="wrap-anywhere">{result.path}</code>
     )
   );
+
+  if (compact && result.status === "available") {
+    return (
+      <div className="flex min-w-0 items-baseline gap-x-1.5">
+        {result.source && (
+          <span className="shrink-0 text-muted-foreground">
+            <span className="sr-only">安装来源 </span>
+            {sourceLabels[result.source]}
+            {path && <span aria-hidden> ·</span>}
+          </span>
+        )}
+        {path}
+      </div>
+    );
+  }
 
   if (result.status === "failed") {
     return (
@@ -115,8 +162,13 @@ export function ToolResult({
             {title}
           </ItemTitle>
         )}
-        {result.message && <ItemDescription>{result.message}</ItemDescription>}
+        {result.status !== "not_found" && result.message && (
+          <ItemDescription>{result.message}</ItemDescription>
+        )}
         {path}
+        {result.source && (
+          <ItemDescription>安装来源 · {sourceLabels[result.source]}</ItemDescription>
+        )}
       </ItemContent>
     </Item>
   );

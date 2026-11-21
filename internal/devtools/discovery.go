@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"sync"
 	"time"
 )
@@ -16,15 +17,39 @@ type toolCandidate struct {
 	err  error
 }
 
+func macOSBinPaths(name string) []string {
+	if runtime.GOOS != "darwin" {
+		return nil
+	}
+	// Finder launches may use a PATH that omits both Homebrew prefixes.
+	paths := []string{filepath.Join("/opt/homebrew/bin", name), filepath.Join("/usr/local/bin", name)}
+	if runtime.GOARCH == "amd64" {
+		paths[0], paths[1] = paths[1], paths[0]
+	}
+	return paths
+}
+
 func detectTools(
 	ctx context.Context,
 	name, notFoundMessage string,
 	probe func(context.Context, string) ToolDetection,
 	extraPaths ...string,
 ) ([]ToolDetection, error) {
+	discover := func(ctx context.Context) []toolCandidate {
+		return findToolCandidates(ctx, name, extraPaths)
+	}
+	return detectCandidates(ctx, notFoundMessage, discover, probe)
+}
+
+func detectCandidates(
+	ctx context.Context,
+	notFoundMessage string,
+	discover func(context.Context) []toolCandidate,
+	probe func(context.Context, string) ToolDetection,
+) ([]ToolDetection, error) {
 	probeCtx, cancel := context.WithTimeout(ctx, 6*time.Second)
 	defer cancel()
-	candidates := findToolCandidates(probeCtx, name, extraPaths)
+	candidates := discover(probeCtx)
 	if err := probeCtx.Err(); err != nil {
 		return nil, err
 	}
@@ -33,11 +58,18 @@ func detectTools(
 	}
 
 	results := make([]ToolDetection, len(candidates))
-	workers := min(len(candidates), 4)
+	jobs := make(chan int, len(candidates))
+	for index := range candidates {
+		jobs <- index
+	}
+	close(jobs)
 	var probes sync.WaitGroup
-	for worker := range workers {
+	for range min(len(candidates), 4) {
 		probes.Go(func() {
-			for index := worker; index < len(candidates) && probeCtx.Err() == nil; index += workers {
+			for index := range jobs {
+				if probeCtx.Err() != nil {
+					return
+				}
 				candidate := candidates[index]
 				if candidate.err != nil {
 					results[index] = pathFailure(candidate.path, candidate.err)
@@ -85,8 +117,14 @@ func findToolCandidates(ctx context.Context, name string, extraPaths []string) [
 		if seen[path] {
 			continue
 		}
-		_, err := exec.LookPath(path)
-		if !errors.Is(err, fs.ErrNotExist) {
+		entry, err := exec.LookPath(path)
+		if errors.Is(err, fs.ErrNotExist) || errors.Is(err, exec.ErrNotFound) {
+			continue
+		}
+		if err == nil {
+			path = entry
+		}
+		if !seen[path] {
 			candidates = append(candidates, toolCandidate{path: path, err: err})
 			seen[path] = true
 		}

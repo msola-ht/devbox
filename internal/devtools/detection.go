@@ -16,10 +16,18 @@ import (
 
 // Service exposes local developer tool detection.
 type Service struct {
+	gh       readcache.Cache[[]ToolDetection]
 	git      readcache.Cache[[]ToolDetection]
 	homebrew readcache.Cache[[]ToolDetection]
+	jq       readcache.Cache[[]ToolDetection]
+	node     readcache.Cache[[]ToolDetection]
+	npm      readcache.Cache[[]ToolDetection]
+	pnpm     readcache.Cache[[]ToolDetection]
+	pwsh     readcache.Cache[[]ToolDetection]
 	python   readcache.Cache[[]ToolDetection]
+	rg       readcache.Cache[[]ToolDetection]
 	uv       readcache.Cache[[]ToolDetection]
+	zsh      readcache.Cache[[]ToolDetection]
 }
 
 // ToolStatus describes the outcome of detecting a tool.
@@ -32,11 +40,12 @@ const (
 	statusUnsupported ToolStatus = "unsupported"
 )
 
-// ToolDetection reports availability, executable path, version, and diagnostics.
+// ToolDetection reports availability and details of a local tool installation.
 type ToolDetection struct {
 	Status  ToolStatus `json:"status"`
 	Path    string     `json:"path"`
 	Version string     `json:"version"`
+	Source  ToolSource `json:"source"`
 	Message string     `json:"message"`
 
 	resolvedPath string
@@ -50,16 +59,25 @@ func pathFailure(path string, err error) ToolDetection {
 	return ToolDetection{Status: statusFailed, Path: path, Message: message}
 }
 
-func detectVersion(ctx context.Context, path, prefix string) ToolDetection {
-	output, err := runCommand(ctx, path, []string{"--version"})
+func detectVersion(ctx context.Context, path, prefix string, environment ...string) ToolDetection {
+	output, err := runCommand(ctx, path, []string{"--version"}, environment...)
+	version, found := strings.CutPrefix(firstOutputLine(output), prefix)
+	if !found {
+		version = ""
+	}
+	return versionDetection(path, strings.TrimSpace(version), err)
+}
+
+func firstOutputLine(output []byte) string {
+	line, _, _ := strings.Cut(strings.TrimSpace(string(output)), "\n")
+	return strings.TrimSpace(line)
+}
+
+func versionDetection(path, version string, err error) ToolDetection {
 	if err != nil {
 		return versionFailure(path, err)
 	}
-
-	firstLine, _, _ := strings.Cut(strings.TrimSpace(string(output)), "\n")
-	version, found := strings.CutPrefix(firstLine, prefix)
-	version = strings.TrimSpace(version)
-	if !found || version == "" {
+	if version == "" {
 		return ToolDetection{
 			Status:  statusFailed,
 			Path:    path,
@@ -67,7 +85,10 @@ func detectVersion(ctx context.Context, path, prefix string) ToolDetection {
 		}
 	}
 	resolvedPath, _ := filepath.EvalSymlinks(path)
-	return ToolDetection{Status: statusAvailable, Path: path, Version: version, resolvedPath: resolvedPath}
+	return ToolDetection{
+		Status: statusAvailable, Path: path, Version: version,
+		Source: sourceForExecutable(resolvedPath), resolvedPath: resolvedPath,
+	}
 }
 
 func versionFailure(path string, err error) ToolDetection {
