@@ -39,5 +39,6 @@ export function useRefreshable<T>(read: Cancellable<[boolean], T>) {
     void load(false);
   }, [load]);
 
-  return { ...state, refresh: () => load(true) };
+  const reload = useCallback(() => load(false), [load]);
+  return { ...state, reload, refresh: () => load(true) };
 }

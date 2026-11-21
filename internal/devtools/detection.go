@@ -14,20 +14,21 @@ import (
 	"devbox/internal/readcache"
 )
 
-// Service exposes local developer tool detection.
+// Service exposes local developer tool detection and installation.
 type Service struct {
-	gh       readcache.Cache[[]ToolDetection]
-	git      readcache.Cache[[]ToolDetection]
-	homebrew readcache.Cache[[]ToolDetection]
-	jq       readcache.Cache[[]ToolDetection]
-	node     readcache.Cache[[]ToolDetection]
-	npm      readcache.Cache[[]ToolDetection]
-	pnpm     readcache.Cache[[]ToolDetection]
-	pwsh     readcache.Cache[[]ToolDetection]
-	python   readcache.Cache[[]ToolDetection]
-	rg       readcache.Cache[[]ToolDetection]
-	uv       readcache.Cache[[]ToolDetection]
-	zsh      readcache.Cache[[]ToolDetection]
+	gh        readcache.Cache[[]ToolDetection]
+	git       readcache.Cache[[]ToolDetection]
+	homebrew  readcache.Cache[[]ToolDetection]
+	jq        readcache.Cache[[]ToolDetection]
+	node      readcache.Cache[[]ToolDetection]
+	npm       readcache.Cache[[]ToolDetection]
+	pnpm      readcache.Cache[[]ToolDetection]
+	pwsh      readcache.Cache[[]ToolDetection]
+	python    readcache.Cache[[]ToolDetection]
+	rg        readcache.Cache[[]ToolDetection]
+	uv        readcache.Cache[[]ToolDetection]
+	uvInstall uvInstallation
+	zsh       readcache.Cache[[]ToolDetection]
 }
 
 // ToolStatus describes the outcome of detecting a tool.

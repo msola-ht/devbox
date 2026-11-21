@@ -8,6 +8,7 @@ import { PageBreadcrumb } from "@/features/navigation/page-breadcrumb";
 import { SettingsPage } from "@/features/settings/settings-page";
 import { AppShell } from "@/features/shell/app-shell";
 import { WorkspacePage } from "@/features/workspace/workspace-page";
+import { ProjectDirectoryProvider } from "@/lib/project-directory";
 
 const pageComponents: Record<AppPath, ComponentType> = {
   "/": WorkspacePage,
@@ -32,9 +33,11 @@ export function App() {
       sidebar={<AppSidebar />}
       breadcrumb={<PageBreadcrumb items={[...route.parents, route.title]} />}
     >
-      <section className="grid w-full gap-4">
-        <Page />
-      </section>
+      <ProjectDirectoryProvider>
+        <section className="grid w-full gap-4">
+          <Page />
+        </section>
+      </ProjectDirectoryProvider>
     </AppShell>
   );
 }

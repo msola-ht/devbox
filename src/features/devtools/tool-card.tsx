@@ -1,5 +1,6 @@
 import { RefreshCwIcon } from "lucide-react";
 import type { Cancellable } from "mygo-runtime";
+import { Suspense, type ComponentType } from "react";
 
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -12,6 +13,7 @@ import {
 } from "@/components/ui/card";
 import { Item, ItemContent, ItemTitle } from "@/components/ui/item";
 import { Spinner } from "@/components/ui/spinner";
+import { toast } from "@/components/ui/toast";
 import {
   Tooltip,
   TooltipContent,
@@ -19,7 +21,7 @@ import {
 } from "@/components/ui/tooltip";
 
 import { useRefreshable } from "@/hooks/use-refreshable";
-import type { ToolDetection } from "@/mygo";
+import { ProjectDialog, type ToolDetection } from "@/mygo";
 
 import { ToolResult, ToolResultsDialog } from "./tool-results";
 
@@ -27,10 +29,16 @@ interface ToolCardProps {
   name: string;
   description: string;
   detect: Cancellable<[boolean], ToolDetection[]>;
+  project?: string;
+  InstallAction?: ComponentType<{
+    canInstall: boolean;
+    project: string;
+    reload: () => Promise<void>;
+  }>;
 }
 
-export function ToolCard({ name, description, detect }: ToolCardProps) {
-  const { data, pending, failed: requestFailed, refresh } = useRefreshable(detect);
+export function ToolCard({ name, description, detect, project = "", InstallAction }: ToolCardProps) {
+  const { data, pending, failed: requestFailed, refresh, reload } = useRefreshable(detect);
   const results = data ?? [];
   const detecting = pending !== null;
   const allFailed =
@@ -41,6 +49,18 @@ export function ToolCard({ name, description, detect }: ToolCardProps) {
     results.find(({ status }) => status === "available") ?? results[0];
   const version = summary?.status === "available" ? summary.version : "";
   const shortVersion = version.replace(/\s+\([^()]*\)$/, "");
+
+  async function openProjectDirectory() {
+    try {
+      await ProjectDialog.openDirectory(project);
+    } catch (error) {
+      toast.add({
+        title: "无法打开工作目录",
+        description: error instanceof Error ? error.message : undefined,
+        type: "error",
+      });
+    }
+  }
 
   return (
     <Card>
@@ -98,6 +118,12 @@ export function ToolCard({ name, description, detect }: ToolCardProps) {
           </Alert>
         )}
         {summary && <ToolResult result={summary} compact />}
+        {project && summary?.status === "failed" && (
+          <Button className="self-start" type="button" size="sm" variant="outline"
+            onClick={() => void openProjectDirectory()}>
+            打开工作目录
+          </Button>
+        )}
         {detecting && !summary && (
           <Item className="p-0">
             <ItemContent>
@@ -106,6 +132,16 @@ export function ToolCard({ name, description, detect }: ToolCardProps) {
           </Item>
         )}
       </CardContent>
+      {InstallAction && (
+        <Suspense fallback={null}>
+          <InstallAction
+            canInstall={!!summary && !detecting && !requestFailed &&
+              (project ? summary.status === "not_found" : !version)}
+            project={project}
+            reload={reload}
+          />
+        </Suspense>
+      )}
     </Card>
   );
 }

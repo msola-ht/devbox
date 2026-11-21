@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"log"
 	"os"
 
@@ -20,10 +21,17 @@ func main() {
 		return
 	}
 
+	proxyService := &proxy.Service{}
+	toolsService, stopTools := devtools.NewService(func(ctx context.Context) ([]string, error) {
+		return proxy.HomebrewEnvironment(ctx, proxyService)
+	})
+	mygo.App.OnQuit(stopTools)
+
 	mygo.BindAs("SystemService", &systeminfo.Service{})
 	mygo.BindAs("EnvironmentService", &runtimeenv.Service{})
-	mygo.BindAs("ProxyService", &proxy.Service{})
-	mygo.BindAs("DevToolsService", &devtools.Service{})
+	mygo.BindAs("ProxyService", proxyService)
+	mygo.BindAs("DevToolsService", toolsService)
+	mygo.BindAs("ProjectDialog", projectDialog{})
 
 	mygo.App.WhenReady(func() {
 		mygo.NewWindow(mygo.WindowOptions{

@@ -8,24 +8,26 @@ Devbox 使用 MyGo 承载 React 界面和 Go 本机服务。前端负责展示�
 
 | 位置 | 职责 |
 | --- | --- |
-| [main.go](main.go) | 分派系统代理查询子命令，注册 Go 服务、创建窗口并启动 MyGo 应用 |
+| [main.go](main.go) | 分派系统代理查询子命令，组装 Go 服务和退出清理，创建窗口并启动 MyGo 应用 |
+| [project_dialog.go](project_dialog.go) | 将项目目录操作接入原生目录选择、文件管理器和 MyGo 绑定 |
 | [mygo.config.ts](mygo.config.ts) | 配置前端开发地址、构建命令、产物和接口生成路径 |
 | [src/main.tsx](src/main.tsx) | 恢复上次路由，挂载 React、StrictMode、HashRouter 和浮动提示 |
 | [src/app.tsx](src/app.tsx) | 将合法路由映射为页面，组合应用外壳、导航和页面 |
 | [src/app-routes.ts](src/app-routes.ts) | 定义路由及标题，校验路径，保存与恢复上次页面 |
 | [src/features](src/features/index.md) | 按业务组织页面、组件、Hook 和业务内工具 |
 | [src/features/runtime-env](src/features/runtime-env/index.md) | 概览页的运行环境展示 |
-| [src/features/devtools](src/features/devtools/index.md) | 工具目录、检测卡片与安装详情 |
+| [src/features/devtools](src/features/devtools/index.md) | 工具目录、检测卡片、安装详情与 uv 安装操作 |
 | [src/features/settings](src/features/settings/index.md) | 代理设置、配置恢复和连接检查 |
 | [src/components/ui](src/components/ui/index.md) | shadcn 基础组件，由业务组件组合使用 |
 | [src/lib](src/lib/index.md) | 已被复用的通用前端工具 |
 | [src/mygo.ts](src/mygo.ts) | MyGo 生成的 TypeScript 类型与服务调用入口 |
 | [internal/systeminfo](internal/systeminfo/index.md) | 当前的系统信息业务，包括采集、快照存储与服务编排 |
 | [internal/runtimeenv](internal/runtimeenv/index.md) | 用户主目录和默认登录 Shell 查询 |
-| [internal/devtools](internal/devtools/index.md) | 本机开发工具检测 |
+| [internal/devtools](internal/devtools/index.md) | 本机开发工具检测与 macOS 上的 uv 安装 |
+| [internal/projectdir](internal/projectdir/index.md) | 默认工作目录、项目路径校验与受限的工具目录访问 |
 | [internal/proxy](internal/proxy/index.md) | 代理配置、路由解析和连接检查 |
 | [internal/configfile](internal/configfile/index.md) | 配置文件定位和 JSON 写入 |
-| [internal/localcmd](internal/localcmd/index.md) | 本机短命令执行和子进程取消 |
+| [internal/localcmd](internal/localcmd/index.md) | 本机命令执行、输出与子进程取消 |
 | [internal/readcache](internal/readcache/index.md) | 同项读取协调与会话内结果复用 |
 
 应用外壳通过属性接收侧栏、面包屑和页面内容。页面组合业务组件；导航组织入口与路由信息。新增业务沿用 `src/features/<业务>` 和 `internal/<业务>` 的组织方式。
@@ -41,7 +43,10 @@ flowchart TD
     Client --> Service[Go Service]
     Service --> System[系统信息]
     Service --> Environment[运行环境]
-    Service --> DevTools[开发工具检测]
+    Service --> DevTools[开发工具检测与安装]
+    Service --> ProjectDialog[项目目录绑定]
+    DevTools --> ProjectDirectory[项目目录]
+    ProjectDialog --> ProjectDirectory
     Service --> Proxy[代理设置]
     System --> Collector[系统采集]
     System --> Snapshot[快照存储]
@@ -62,7 +67,7 @@ flowchart TD
 - 页面负责组合刷新入口，卡片负责展示。[use-refreshable.ts](src/hooks/use-refreshable.ts) 协调系统信息、运行环境和开发工具的首次读取、手动刷新与取消。设置表单管理独立的读取、写入和连接检查。
 - Go Service 组合具体采集与存储能力，负责业务顺序、超时和错误处理。被绑定服务的导出方法属于前端可调用契约。
 - 采集模块负责系统接口与平台命令，存储模块负责文件格式与读写，二者通过数据模型协作。
-- [localcmd](internal/localcmd/index.md) 执行短命令并管理子进程，业务模块指定命令、环境与截止时间。Windows 的显卡和磁盘采集共用 PowerShell JSON 查询入口。
+- [localcmd](internal/localcmd/index.md) 执行本机命令并管理子进程，业务模块指定命令、环境和上下文，按需要捕获或实时接收输出。Windows 的显卡和磁盘采集共用 PowerShell JSON 查询入口。
 - Go 业务服务持有各自的缓存。[readcache](internal/readcache/index.md) 复用最近成功的读取结果，协调同一项的并发读取。业务服务决定有效期与主动刷新的语义。
 - 业务界面通过 shadcn 组件和内置变体组合。业务内的格式化和请求逻辑位于所属业务目录。
 - 当前采用具体函数组合。公共模块与接口的提取以实际复用、替换实现或依赖解耦需求为依据。
@@ -110,6 +115,7 @@ MyGo 接口生成会执行应用入口直到 `App.Run`。入口中保持服务�
 | 当前展示的快照、刷新中和错误 | 查询 Hook 的 React 内存状态 |
 | 运行环境 | `EnvironmentService` 的会话内结果，由概览统一刷新 |
 | 开发工具检测结果 | `DevToolsService` 的会话内结果，按工具单独刷新 |
+| uv 安装任务与最近输出 | `DevToolsService` 保留本次运行中最近的任务与输出，页面负责查询与展示 |
 | 代理设置 | `ProxyService` 和 `os.UserConfigDir()/devbox/proxy.json` |
 | 系统代理展示结果 | `ProxyService` 的 30 秒内存缓存 |
 | 代理表单草稿和连接检查状态 | 设置页面的 React 内存状态 |
@@ -183,7 +189,7 @@ Go 根据已知位置及解析符号链接后的实际路径识别来源。[通�
 - [jq、ripgrep 和 GitHub CLI](internal/devtools/utilities.go) 分别查找 `jq`、`rg` 和 `gh` 并执行 `--version`。macOS 上还检查 `/opt/homebrew/bin` 和 `/usr/local/bin`。GitHub CLI 检测关闭版本更新检查。
 - [Zsh](internal/devtools/zsh.go) 在 macOS 和 Linux 上执行 `zsh --version`。应用 `PATH` 之后检查 macOS 的常用包管理器路径以及 `/bin/zsh` 和 `/usr/bin/zsh`。
 - [PowerShell](internal/devtools/powershell.go) 在 Windows 上查找 `pwsh`，并检查 PowerShell 7 和系统自带 Windows PowerShell 的默认安装路径。探测在不加载用户配置的非交互会话中读取 `$PSVersionTable.PSVersion`。
-- [uv](internal/devtools/uv.go) 使用 `PATH` 中的绝对入口并执行 `uv --version`。
+- [uv](internal/devtools/uv.go) 执行 `uv --version`，从 `PATH` 查找绝对入口。macOS 上还检查常用安装路径和本次运行中安装任务读取到的 Homebrew 前缀。
 - [Python](internal/devtools/python.go) 在 macOS 和 Linux 上查找 `python3`，在 Windows 上查找 `python.exe`。macOS 的 `/usr/bin/python3` 与 Git 共用 Apple 开发工具目录查询。Windows 的应用执行别名通过 `pymanager.exe list --one --format=json` 查询已安装解释器，探测为子进程关闭自动安装选项。探测在隔离模式中读取版本、当前解释器路径及可用的基础解释器路径，并识别 uv 的默认数据目录或 `UV_PYTHON_INSTALL_DIR` 中的解释器。
 - [Homebrew](internal/devtools/homebrew.go) 在 macOS 上检测。`PATH` 入口之后，按应用进程架构检查 `/opt/homebrew/bin/brew` 和 `/usr/local/bin/brew`。
 - [Node.js](internal/devtools/node.go) 与 npm 共用已知版本目录的查找和来源识别。先查应用 `PATH`，再查 macOS 常用安装路径以及 Homebrew 默认 Cellar 的 `node` 与 `node@*`、fnm 的 `node-versions`、nvm 的 `versions/node` 和 nvm-windows 安装目录。同一实际路径和版本经多个入口命中时，保留最先发现的入口。
@@ -197,6 +203,26 @@ Go 根据已知位置及解析符号链接后的实际路径识别来源。[通�
 | `unsupported` | 当前平台不适用该项检测，包含 `message` |
 
 未找到入口或平台不适用时，数组包含一条对应状态。检测结果保存在 Go 进程内。刷新期间显示上次结果，收到新结果后更新对应卡片。请求失败时保留上次结果并提示重试。一次请求失败只影响对应卡片。
+
+## uv 安装
+
+macOS 的 uv 卡片在无可用版本时提供安装入口。用户点击后，[Go 安装任务](internal/devtools/uv_install.go) 重新检查 uv 和 Homebrew。uv 已可用时直接结束，Homebrew 不可用时卡片提供安装说明。Go 选用第一个可用的 Homebrew 入口，读取其前缀，通过绝对路径运行 `brew install --formula uv`。子进程采用非交互模式，关闭自动更新、清理和已安装依赖方的检查。入口组装时注入[代理环境适配](internal/proxy/homebrew.go)，安装启动前读取已保存的代理设置。
+
+| 前端调用 | 行为 |
+| --- | --- |
+| `DevToolsService.startUVInstall(project)` | 启动指定作用域的任务。相同作用域已有活动任务时返回该任务 |
+| `DevToolsService.getUVInstall(project)` | 读取该作用域最近任务的标识、状态、提示和最近 16 KiB 的合并输出。未启动过时返回 `null` |
+| `DevToolsService.cancelUVInstall(project, id)` | 请求取消该作用域内标识匹配且尚可取消的任务 |
+
+目录校验与打开目录通过普通 IPC 调用，前端等待操作结果。目录选择使用原生对话框，Promise 在用户选定或取消时完成。安装启动接口只登记任务，磁盘检查、下载、命令执行及提交在 Go 后台完成。取消接口提交请求，前端以轮询返回的任务状态为准。
+
+页面轮询活动任务与输出，离开时停止读取。安装命令退出后，Go 重新检测 uv 并更新检测缓存，包括取消和命令失败的情况。命令成功且在所选 Homebrew 的 `bin/uv` 入口读到版本时，任务标为成功。命令成功但该入口未通过复检时，任务单独显示结果。页面收到结束状态时重新读取 Go 的检测缓存。MyGo 退出钩子取消任务并等待命令清理。
+
+概览页的[工作目录条](src/features/workspace/project-directory-bar.tsx) 通过 `ProjectDialog.selectDirectory()` 选择目录。原生对话框返回解析符号链接后的绝对路径，取消时返回空字符串。待确认路径由概览持有。确认自选目录时，`ProjectDialog.validateDirectory()` 只校验目录可读，成功后更新应用共享的[工作目录](src/lib/project-directory.tsx)并保存界面偏好。开发工具的项目隔离模式使用已确认的目录，并在目录改变时重建项目卡片与轮询。安装任务参数中的空目录表示系统作用域。项目视图展示 uv，macOS 可从 Astral 安装，具体边界见[项目环境方案](PROJECT_ENV_DESIGN.md)。
+
+没有保存工作目录时，应用通过 `ProjectDialog.createDefaultDirectory()` 创建或复用用户主目录下的 `.heforge-devbox`。概览通过文件夹图标打开默认目录，当前使用自选目录时提供恢复默认目录的图标，恢复前仍需预览和确认。创建默认目录和校验自选目录都在短 IPC 调用内完成。实际安装在 Go 后台创建项目内的 `.devbox/tools`，安装器只下载到应用私有临时目录。卡片在项目 uv 未安装时提供安装操作。已存在的项目 uv 不可用时，`ProjectDialog.openDirectory()` 可以从卡片打开工作目录供用户检查。代理配置保存在平台配置目录，界面偏好保存在应用存储中。
+
+`DevToolsService.detectProjectUV(project, refresh)` 读取 `.devbox/tools/uv/install.json` 并检查系统、架构和 uv、uvx 的文件指纹。项目读取每次核对文件，与全局检测缓存独立。安装器与新下载版本的探测在应用临时目录内运行，校验后将二进制与记录排他发布。完成后前端重新读取相同项目目录，作用域和所选目录作为界面偏好保存。Go 退出时等待所有活动作用域完成清理。
 
 ## 代理设置
 
@@ -214,7 +240,7 @@ Go 根据已知位置及解析符号链接后的实际路径识别来源。[通�
 
 代理配置保存在 `os.UserConfigDir()/devbox/proxy.json`，当前格式版本为 `1`。设置页识别无效文件后提供恢复默认设置操作。保存或恢复失败时保留当前配置。服务首次读取或保存时加载配置，服务注册和接口生成期间无需读取。
 
-连接检查是当前唯一的代理网络操作。手动代理客户端首次请求通过 SOCKS5 握手识别所选地址，未识别到无认证 SOCKS5 时使用 HTTP，探测结果由客户端复用。系统和手动模式都绕过本机回环地址。连接检查在 HTTP `CONNECT` 阶段识别代理认证错误。
+连接检查使用应用内 HTTP 客户端。系统 uv 安装通过 Homebrew 联网，项目 uv 安装由独立下载进程联网，共用已保存的代理环境设置。手动代理客户端首次请求通过 SOCKS5 握手识别所选地址，未识别到无认证 SOCKS5 时使用 HTTP，探测结果由客户端复用。应用内的系统和手动模式都绕过本机回环地址。连接检查在 HTTP `CONNECT` 阶段识别代理认证错误。
 
 实际路由展示和连接检查共用系统代理解析。启动环境中的 `HTTP_PROXY`、`HTTPS_PROXY` 各自优先，`ALL_PROXY` 填补缺少的协议配置，`NO_PROXY` 匹配的目标直连。请求协议没有环境代理时，交由 MyGo 的 `netproxy.Proxy` 按平台解析。没有代理环境变量时，MyGo 在应用进程内按协议和主机缓存结果五秒。存在代理环境变量时，桌面端通过不继承这些变量的短命令读取系统路由，最长等待六秒。MyGo 返回空路由时直连。macOS 系统配置使用 `scutil --proxy` 读取。外部进程的代理适配见[代理设计](PROXY_DESIGN.md)。
 

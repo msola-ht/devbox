@@ -1,4 +1,4 @@
-import { isMyGo, runtime, type Cancellable, type Platform } from "mygo-runtime";
+import type { Cancellable, Platform } from "mygo-runtime";
 
 import { DevToolsService, type ToolDetection } from "@/mygo";
 
@@ -79,8 +79,7 @@ const developmentToolGroups: readonly ToolGroupDefinition[] = [
   },
 ];
 
-export function getDevelopmentToolGroups() {
-  const platform = isMyGo() ? runtime().platform : undefined;
+export function getDevelopmentToolGroups(platform: Platform | undefined) {
   return developmentToolGroups
     .map((group) => ({
       ...group,

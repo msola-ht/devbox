@@ -4,7 +4,8 @@ Go 本机业务与基础模块。[main.go](../main.go) 注册系统信息、运�
 
 - [systeminfo](systeminfo/index.md)：系统信息采集、快照存储与服务接口。
 - [runtimeenv](runtimeenv/index.md) 提供运行环境读取。
-- [devtools](devtools/index.md) 提供开发工具检测。
+- [devtools](devtools/index.md) 提供开发工具检测和 macOS 上的 uv 安装。
+- [projectdir](projectdir/index.md) 管理项目工作目录与项目工具的目录边界。
 - [proxy](proxy/index.md) 提供代理设置、路由解析和连接检查。
 - [configfile](configfile/index.md) 提供 Devbox 配置文件定位和 JSON 写入。
 - [localcmd](localcmd/index.md) 运行可取消的本机命令。

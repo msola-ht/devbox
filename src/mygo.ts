@@ -87,6 +87,17 @@ export type ToolSource = "" | "unknown" | "system" | "apple_developer_tools" | "
 /** ToolStatus describes the outcome of detecting a tool. */
 export type ToolStatus = "available" | "not_found" | "failed" | "unsupported";
 
+/** UVInstallStatus is the current phase or outcome of a uv installation. */
+export type UVInstallStatus = "running" | "canceling" | "succeeded" | "failed" | "canceled" | "missing_homebrew" | "not_detected";
+
+/** UVInstallTask reports the latest app-owned installation and its recent output. */
+export interface UVInstallTask {
+  id: number;
+  status: UVInstallStatus;
+  message: string;
+  output: string;
+}
+
 // ---- Services ----
 
 /** Service coordinates system information collection and snapshot persistence. */
@@ -115,8 +126,10 @@ export const ProxyService = {
   save: bind<[Settings], Settings>("ProxyService.Save", (input: Settings) => [input]),
 } as const;
 
-/** Service exposes local developer tool detection. */
+/** Service exposes local developer tool detection and installation. */
 export const DevToolsService = {
+  /** CancelUVInstall stops the matching active task and its subprocesses. */
+  cancelUVInstall: bind<[string, number], void>("DevToolsService.CancelUVInstall", (project: string, id: number) => [project, id]),
   /** DetectGH returns cached or newly detected GitHub CLI executables. */
   detectGH: bind<[boolean], ToolDetection[]>("DevToolsService.DetectGH", (refresh: boolean) => [refresh]),
   /** DetectGit returns cached or newly detected Git executables. */
@@ -133,6 +146,8 @@ export const DevToolsService = {
   detectPNPM: bind<[boolean], ToolDetection[]>("DevToolsService.DetectPNPM", (refresh: boolean) => [refresh]),
   /** DetectPowerShell returns cached or newly detected PowerShell installations on Windows. */
   detectPowerShell: bind<[boolean], ToolDetection[]>("DevToolsService.DetectPowerShell", (refresh: boolean) => [refresh]),
+  /** DetectProjectUV checks the selected project's recorded uv installation. */
+  detectProjectUV: bind<[string, boolean], ToolDetection[]>("DevToolsService.DetectProjectUV", (project: string, arg1: boolean) => [project, arg1]),
   /** DetectPython returns cached or newly detected Python 3 interpreters. */
   detectPython: bind<[boolean], ToolDetection[]>("DevToolsService.DetectPython", (refresh: boolean) => [refresh]),
   /** DetectRG returns cached or newly detected ripgrep executables. */
@@ -141,4 +156,17 @@ export const DevToolsService = {
   detectUV: bind<[boolean], ToolDetection[]>("DevToolsService.DetectUV", (refresh: boolean) => [refresh]),
   /** DetectZsh returns cached or newly detected Zsh executables on macOS and Linux. */
   detectZsh: bind<[boolean], ToolDetection[]>("DevToolsService.DetectZsh", (refresh: boolean) => [refresh]),
+  /** GetUVInstall returns the most recent task, or null if none has been started. */
+  getUVInstall: bind<[string], UVInstallTask | null>("DevToolsService.GetUVInstall", (project: string) => [project]),
+  /** StartUVInstall starts a uv installation or returns the active task in this scope. */
+  startUVInstall: bind<[string], UVInstallTask>("DevToolsService.StartUVInstall", (project: string) => [project]),
+} as const;
+
+export const ProjectDialog = {
+  createDefaultDirectory: bind<[], string>("ProjectDialog.CreateDefaultDirectory", () => []),
+  defaultDirectory: bind<[], string>("ProjectDialog.DefaultDirectory", () => []),
+  openDefaultDirectory: bind<[], void>("ProjectDialog.OpenDefaultDirectory", () => []),
+  openDirectory: bind<[string], void>("ProjectDialog.OpenDirectory", (path: string) => [path]),
+  selectDirectory: bind<[], string>("ProjectDialog.SelectDirectory", () => []),
+  validateDirectory: bind<[string], void>("ProjectDialog.ValidateDirectory", (path: string) => [path]),
 } as const;

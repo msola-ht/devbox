@@ -1,8 +1,13 @@
+import { isMyGo } from "mygo-runtime";
+import { lazy, Suspense } from "react";
+
 import { Button } from "@/components/ui/button";
 import { EnvironmentCard } from "@/features/runtime-env/environment-card";
 import { SystemInfoCard } from "@/features/system/system-info-card";
 import { useRefreshable } from "@/hooks/use-refreshable";
 import { EnvironmentService, SystemService } from "@/mygo";
+
+const ProjectDirectoryBar = lazy(() => import("./project-directory-bar"));
 
 export function WorkspacePage() {
   const system = useRefreshable(SystemService.get);
@@ -16,7 +21,12 @@ export function WorkspacePage() {
   }
 
   return (
-    <div className="@container">
+    <div className="@container flex flex-col gap-4">
+      {isMyGo() && (
+        <Suspense fallback={null}>
+          <ProjectDirectoryBar />
+        </Suspense>
+      )}
       <div className="grid gap-4 @3xl:grid-cols-2">
         <SystemInfoCard
           snapshot={system.data}
