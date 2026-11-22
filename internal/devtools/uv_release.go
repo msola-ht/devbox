@@ -62,16 +62,21 @@ func latestUVAsset(ctx context.Context, client *http.Client, name string) (uvRel
 }
 
 // An empty result means the project already has the latest release.
-func (i *uvInstallation) downloadUVRelease(ctx context.Context, client *http.Client, directory, currentVersion string, job *uvInstallJob) (string, error) {
-	var name string
+func (i *toolInstallation) downloadUVRelease(ctx context.Context, client *http.Client, directory, currentVersion string, job *toolInstallJob) (string, error) {
+	var arch string
 	switch runtime.GOARCH {
 	case "arm64":
-		name = "uv-aarch64-apple-darwin.tar.gz"
+		arch = "aarch64"
 	case "amd64":
-		name = "uv-x86_64-apple-darwin.tar.gz"
+		arch = "x86_64"
 	default:
-		return "", fmt.Errorf("当前架构 %s 不支持项目 uv 安装", runtime.GOARCH)
+		return "", fmt.Errorf("当前架构 %s 不支持 uv 安装", runtime.GOARCH)
 	}
+	target := "apple-darwin"
+	if runtime.GOOS == "linux" {
+		target = "unknown-linux-gnu"
+	}
+	name := "uv-" + arch + "-" + target + ".tar.gz"
 	client.CheckRedirect = func(req *http.Request, via []*http.Request) error {
 		if req.URL.Scheme != "https" || len(via) >= 10 {
 			return errors.New("uv 下载的重定向无效")

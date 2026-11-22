@@ -16,19 +16,31 @@ import (
 
 // Service exposes local developer tool detection and installation.
 type Service struct {
-	gh        readcache.Cache[[]ToolDetection]
-	git       readcache.Cache[[]ToolDetection]
-	homebrew  readcache.Cache[[]ToolDetection]
-	jq        readcache.Cache[[]ToolDetection]
-	node      readcache.Cache[[]ToolDetection]
-	npm       readcache.Cache[[]ToolDetection]
-	pnpm      readcache.Cache[[]ToolDetection]
-	pwsh      readcache.Cache[[]ToolDetection]
-	python    readcache.Cache[[]ToolDetection]
-	rg        readcache.Cache[[]ToolDetection]
-	uv        readcache.Cache[[]ToolDetection]
-	uvInstall uvInstallation
-	zsh       readcache.Cache[[]ToolDetection]
+	chocolatey    readcache.Cache[[]ToolDetection]
+	gh            readcache.Cache[[]ToolDetection]
+	git           readcache.Cache[[]ToolDetection]
+	homebrew      readcache.Cache[[]ToolDetection]
+	homebrewPaths homebrewEntries
+	jq            readcache.Cache[[]ToolDetection]
+	node          readcache.Cache[[]ToolDetection]
+	npm           readcache.Cache[[]ToolDetection]
+	pnpm          readcache.Cache[[]ToolDetection]
+	pwsh          readcache.Cache[[]ToolDetection]
+	python        readcache.Cache[[]ToolDetection]
+	rg            readcache.Cache[[]ToolDetection]
+	uv            readcache.Cache[[]ToolDetection]
+	winget        readcache.Cache[[]ToolDetection]
+	installation  toolInstallation
+	zsh           readcache.Cache[[]ToolDetection]
+}
+
+func (s *Service) detectVersionedTool(ctx context.Context, tool InstallTool, bin, prefix string, paths []string, environment ...string) ([]ToolDetection, error) {
+	location := s.homebrewPaths.location(tool)
+	paths = location.paths(append(macOSBinPaths(bin), paths...))
+	return detectTools(ctx, bin, fmt.Sprintf("在已检查的路径中没有找到 %s。", bin),
+		location.probe(func(ctx context.Context, path string) ToolDetection {
+			return detectVersion(ctx, path, prefix, environment...)
+		}), paths...)
 }
 
 // ToolStatus describes the outcome of detecting a tool.

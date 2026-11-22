@@ -1,9 +1,9 @@
 import type { Cancellable, Platform } from "mygo-runtime";
 
-import { DevToolsService, type ToolDetection } from "@/mygo";
+import { DevToolsService, type InstallTool, type ToolDetection } from "@/mygo";
 
 interface ToolDefinition {
-  id: string;
+  id: InstallTool;
   name: string;
   description: string;
   detect: Cancellable<[boolean], ToolDetection[]>;
@@ -28,6 +28,20 @@ const developmentToolGroups: readonly ToolGroupDefinition[] = [
         detect: DevToolsService.detectHomebrew,
         platforms: ["darwin"],
       },
+      {
+        id: "winget",
+        name: "WinGet",
+        description: "Windows App Installer 提供的包管理器",
+        detect: DevToolsService.detectWinGet,
+        platforms: ["win32"],
+      },
+      {
+        id: "chocolatey",
+        name: "Chocolatey",
+        description: "Windows 软件包管理器",
+        detect: DevToolsService.detectChocolatey,
+        platforms: ["win32"],
+      },
     ],
   },
   {
@@ -37,7 +51,7 @@ const developmentToolGroups: readonly ToolGroupDefinition[] = [
       { id: "git", name: "Git", description: "版本控制工具", detect: DevToolsService.detectGit },
       { id: "gh", name: "gh", description: "GitHub 命令行工具", detect: DevToolsService.detectGH },
       { id: "jq", name: "jq", description: "JSON 处理工具", detect: DevToolsService.detectJQ },
-      { id: "rg", name: "rg", description: "文本搜索工具", detect: DevToolsService.detectRG },
+      { id: "ripgrep", name: "rg", description: "文本搜索工具", detect: DevToolsService.detectRG },
     ],
   },
   {
@@ -84,8 +98,7 @@ export function getDevelopmentToolGroups(platform: Platform | undefined) {
     .map((group) => ({
       ...group,
       tools: group.tools.filter(({ platforms }) =>
-        !platforms || (platform !== undefined && platforms.includes(platform)),
-      ),
+        !platforms || (platform !== undefined && platforms.includes(platform))),
     }))
     .filter(({ tools }) => tools.length > 0);
 }

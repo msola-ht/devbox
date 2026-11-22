@@ -1,7 +1,6 @@
 import { RefreshCwIcon } from "lucide-react";
 import type { Cancellable } from "mygo-runtime";
-import { Suspense, useEffect, type ComponentType } from "react";
-import { Link } from "react-router";
+import { lazy, Suspense, useCallback, useEffect } from "react";
 
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -9,12 +8,12 @@ import {
   Card,
   CardAction,
   CardContent,
+  CardFooter,
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
 import { Item, ItemContent, ItemTitle } from "@/components/ui/item";
 import { Spinner } from "@/components/ui/spinner";
-import { toast } from "@/components/ui/toast";
 import {
   Tooltip,
   TooltipContent,
@@ -22,24 +21,26 @@ import {
 } from "@/components/ui/tooltip";
 
 import { useRefreshable } from "@/hooks/use-refreshable";
-import { ProjectDialog, type ToolDetection } from "@/mygo";
+import type { InstallChannel, InstallTool, ToolDetection } from "@/mygo";
 
 import { ToolResult, ToolResultsDialog } from "./tool-results";
 
+const ToolInstallAction = lazy(() => import("./tool-install-action"));
+
 interface ToolCardProps {
+  id: InstallTool;
   name: string;
   description: string;
   detect: Cancellable<[boolean], ToolDetection[]>;
-  project?: string;
-  InstallAction?: ComponentType<{
-    detection: ToolDetection | undefined;
-    ready: boolean;
-    project: string;
-    reload: () => Promise<void>;
-  }>;
+  channel?: InstallChannel;
+  recheckRevision: number;
+  onInstallSettled: (tool: InstallTool) => void;
+  hideInstallButton: boolean;
+  onAvailabilityChange?: (available: boolean) => void;
 }
 
-export function ToolCard({ name, description, detect, project = "", InstallAction }: ToolCardProps) {
+export function ToolCard({ id, name, description, detect, channel, recheckRevision, onInstallSettled, hideInstallButton,
+  onAvailabilityChange }: ToolCardProps) {
   const { data, pending, failed: requestFailed, refresh, reload } = useRefreshable(detect);
   const results = data ?? [];
   const detecting = pending !== null;
@@ -51,27 +52,17 @@ export function ToolCard({ name, description, detect, project = "", InstallActio
     results.find(({ status }) => status === "available") ?? results[0];
   const version = summary?.status === "available" ? summary.version : "";
   const shortVersion = version.replace(/\s+\([^()]*\)$/, "");
+  const available = summary?.status === "available";
+  const reloadAfterInstall = useCallback(async () => {
+    onInstallSettled(id);
+    await reload();
+  }, [id, onInstallSettled, reload]);
 
   useEffect(() => {
-    if (!project) return;
-    function recheckProject() {
-      void reload();
-    }
-    window.addEventListener("focus", recheckProject);
-    return () => window.removeEventListener("focus", recheckProject);
-  }, [project, reload]);
+    if (recheckRevision > 0) void reload();
+  }, [recheckRevision, reload]);
 
-  async function openProjectDirectory() {
-    try {
-      await ProjectDialog.openDirectory(project);
-    } catch (error) {
-      toast.add({
-        title: "无法打开工作目录",
-        description: error instanceof Error ? error.message : undefined,
-        type: "error",
-      });
-    }
-  }
+  useEffect(() => { onAvailabilityChange?.(available); }, [available, onAvailabilityChange]);
 
   return (
     <Card>
@@ -103,6 +94,7 @@ export function ToolCard({ name, description, detect, project = "", InstallActio
                     size="icon-sm"
                     aria-label={refreshLabel}
                     disabled={detecting}
+                    focusableWhenDisabled
                     onClick={() => void refresh()}
                   />
                 }
@@ -128,19 +120,7 @@ export function ToolCard({ name, description, detect, project = "", InstallActio
             </AlertDescription>
           </Alert>
         )}
-        {summary && <ToolResult result={summary} compact project={!!project} />}
-        {project && summary?.status === "project_unavailable" && (
-          <Button className="self-start" size="sm" variant="outline" nativeButton={false}
-            render={<Link to="/" />}>
-            前往概览
-          </Button>
-        )}
-        {project && summary?.status === "failed" && (
-          <Button className="self-start" type="button" size="sm" variant="outline"
-            onClick={() => void openProjectDirectory()}>
-            打开工作目录
-          </Button>
-        )}
+        {summary && <ToolResult result={summary} compact />}
         {detecting && !summary && (
           <Item className="p-0">
             <ItemContent>
@@ -149,13 +129,25 @@ export function ToolCard({ name, description, detect, project = "", InstallActio
           </Item>
         )}
       </CardContent>
-      {InstallAction && (
+      {channel === "homebrew_setup" && !detecting && !requestFailed &&
+        (summary?.status === "not_found" || summary?.status === "failed") && (
+        <CardFooter>
+          <Button size="sm" nativeButton={false}
+            render={<a href="https://docs.brew.sh/Installation" target="_blank" rel="noreferrer" />}>
+            查看 Homebrew 安装说明
+          </Button>
+        </CardFooter>
+      )}
+      {channel && channel !== "homebrew_setup" && (
         <Suspense fallback={null}>
-          <InstallAction
-            detection={summary}
-            ready={!detecting && !requestFailed}
-            project={project}
-            reload={reload}
+          <ToolInstallAction
+            tool={id}
+            channel={channel}
+            name={name}
+            results={results}
+            hideInstallButton={hideInstallButton}
+            ready={!detecting}
+            reload={reloadAfterInstall}
           />
         </Suspense>
       )}

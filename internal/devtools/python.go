@@ -12,15 +12,17 @@ import (
 
 // DetectPython returns cached or newly detected Python 3 interpreters.
 func (s *Service) DetectPython(ctx context.Context, refresh bool) ([]ToolDetection, error) {
-	return s.python.Read(ctx, refresh, 0, detectPython)
+	return s.python.Read(ctx, refresh, 0, s.detectPython)
 }
 
-func detectPython(ctx context.Context) ([]ToolDetection, error) {
+func (s *Service) detectPython(ctx context.Context) ([]ToolDetection, error) {
 	name := "python3"
 	if runtime.GOOS == "windows" {
 		name = "python.exe"
 	}
-	return detectTools(ctx, name, fmt.Sprintf("应用的 PATH 中没有找到 %s。", name), probePythonEntry)
+	location := s.homebrewPaths.location(toolPython)
+	return detectTools(ctx, name, fmt.Sprintf("在已检查的路径中没有找到 %s。", name), location.probe(probePythonEntry),
+		location.paths(macOSBinPaths(name))...)
 }
 
 func probePythonEntry(ctx context.Context, path string) ToolDetection {

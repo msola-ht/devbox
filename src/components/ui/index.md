@@ -3,7 +3,6 @@
 已安装的 shadcn 组件，配置见 [components.json](../../../components.json)。业务界面通过组合这些组件实现。
 
 - [alert.tsx](alert.tsx)：提示与错误信息。
-- [alert-dialog.tsx](alert-dialog.tsx) 为卸载等操作提供确认对话框。
 - [avatar.tsx](avatar.tsx)：头像与占位内容。
 - [breadcrumb.tsx](breadcrumb.tsx)：面包屑。
 - [button.tsx](button.tsx)：按钮与尺寸、样式变体。

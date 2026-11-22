@@ -9,7 +9,9 @@ import (
 // DetectGit returns cached or newly detected Git executables.
 func (s *Service) DetectGit(ctx context.Context, refresh bool) ([]ToolDetection, error) {
 	return s.git.Read(ctx, refresh, 0, func(ctx context.Context) ([]ToolDetection, error) {
-		return detectTools(ctx, "git", "应用的 PATH 中没有找到 Git。", probeGit)
+		location := s.homebrewPaths.location(toolGit)
+		return detectTools(ctx, "git", "在已检查的路径中没有找到 Git。", location.probe(probeGit),
+			location.paths(macOSBinPaths("git"))...)
 	})
 }
 

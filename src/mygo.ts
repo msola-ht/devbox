@@ -15,6 +15,12 @@ export interface GPUInfo {
   model: string;
 }
 
+/** InstallChannel identifies the platform installer used by a tool card. */
+export type InstallChannel = "homebrew" | "homebrew_setup" | "winget" | "app_installer" | "chocolatey" | "apt" | "astral" | "npm";
+
+/** InstallTool is the fixed identifier of a tool Devbox can install. */
+export type InstallTool = "homebrew" | "winget" | "chocolatey" | "uv" | "ripgrep" | "jq" | "git" | "gh" | "python" | "node" | "npm" | "pnpm" | "zsh" | "powershell";
+
 /** ManualConfig identifies the server shared by HTTP and SOCKS5 proxies. */
 export interface ManualConfig {
   address: string;
@@ -81,28 +87,34 @@ export interface ToolDetection {
   message: string;
 }
 
-/** ToolSource identifies the recognized provider of a detected executable. */
-export type ToolSource = "" | "unknown" | "system" | "apple_developer_tools" | "homebrew" | "fnm" | "nvm" | "nvm_windows" | "uv" | "corepack";
+/** ToolInstallAction identifies the operation performed by an installation task. */
+export type ToolInstallAction = "install" | "update" | "uninstall";
 
-/** ToolStatus describes the outcome of detecting a tool. */
-export type ToolStatus = "available" | "not_found" | "failed" | "unsupported" | "incompatible" | "project_unavailable";
+/** ToolInstallOption is the installation option exposed on this machine. */
+export interface ToolInstallOption {
+  tool: InstallTool;
+  channel: InstallChannel;
+}
 
-/** UVInstallAction identifies an operation on uv. */
-export type UVInstallAction = "install" | "update" | "uninstall";
+/** ToolInstallStatus is the current phase or outcome of a tool installation. */
+export type ToolInstallStatus = "running" | "canceling" | "succeeded" | "failed" | "canceled" | "missing_homebrew" | "missing_installer" | "not_detected";
 
-/** UVInstallStatus is the current phase or outcome of a uv installation. */
-export type UVInstallStatus = "running" | "canceling" | "succeeded" | "failed" | "canceled" | "missing_homebrew" | "not_detected";
-
-/** UVInstallTask reports the latest app-owned installation and its recent output. */
-export interface UVInstallTask {
+/** ToolInstallTask reports the latest app-owned installation and its recent output. */
+export interface ToolInstallTask {
   id: number;
-  action: UVInstallAction;
-  status: UVInstallStatus;
+  action: ToolInstallAction;
+  status: ToolInstallStatus;
   message: string;
   output: string;
   downloadPercent: number | null;
   cancelable: boolean;
 }
+
+/** ToolSource identifies the recognized provider of a detected executable. */
+export type ToolSource = "" | "unknown" | "system" | "apple_developer_tools" | "homebrew" | "fnm" | "nvm" | "nvm_windows" | "uv" | "corepack";
+
+/** ToolStatus describes the outcome of detecting a tool. */
+export type ToolStatus = "available" | "not_found" | "failed" | "unsupported" | "incompatible" | "project_unavailable";
 
 // ---- Services ----
 
@@ -134,8 +146,12 @@ export const ProxyService = {
 
 /** Service exposes local developer tool detection and installation. */
 export const DevToolsService = {
+  /** CancelToolInstall requests cancellation of the matching local installation. */
+  cancelToolInstall: bind<[InstallTool, number], ToolInstallTask | null>("DevToolsService.CancelToolInstall", (tool: InstallTool, id: number) => [tool, id]),
   /** CancelUVInstall requests cancellation and returns the current task snapshot. */
-  cancelUVInstall: bind<[string, number], UVInstallTask | null>("DevToolsService.CancelUVInstall", (project: string, id: number) => [project, id]),
+  cancelUVInstall: bind<[string, number], ToolInstallTask | null>("DevToolsService.CancelUVInstall", (project: string, id: number) => [project, id]),
+  /** DetectChocolatey reads the version of the Chocolatey command. */
+  detectChocolatey: bind<[boolean], ToolDetection[]>("DevToolsService.DetectChocolatey", (refresh: boolean) => [refresh]),
   /** DetectGH returns cached or newly detected GitHub CLI executables. */
   detectGH: bind<[boolean], ToolDetection[]>("DevToolsService.DetectGH", (refresh: boolean) => [refresh]),
   /** DetectGit returns cached or newly detected Git executables. */
@@ -160,23 +176,32 @@ export const DevToolsService = {
   detectRG: bind<[boolean], ToolDetection[]>("DevToolsService.DetectRG", (refresh: boolean) => [refresh]),
   /** DetectUV returns cached or newly detected uv executables. */
   detectUV: bind<[boolean], ToolDetection[]>("DevToolsService.DetectUV", (refresh: boolean) => [refresh]),
+  /** DetectWinGet reads the version of the Windows App Installer command. */
+  detectWinGet: bind<[boolean], ToolDetection[]>("DevToolsService.DetectWinGet", (refresh: boolean) => [refresh]),
   /** DetectZsh returns cached or newly detected Zsh executables on macOS and Linux. */
   detectZsh: bind<[boolean], ToolDetection[]>("DevToolsService.DetectZsh", (refresh: boolean) => [refresh]),
+  /** GetToolInstall reads the most recent local installation for a tool. */
+  getToolInstall: bind<[InstallTool], ToolInstallTask | null>("DevToolsService.GetToolInstall", (tool: InstallTool) => [tool]),
+  /** GetToolInstallOptions lists the installation channels supported on this machine. */
+  getToolInstallOptions: bind<[], ToolInstallOption[]>("DevToolsService.GetToolInstallOptions", () => []),
   /** GetUVInstall returns the most recent task, or null if none has been started. */
-  getUVInstall: bind<[string], UVInstallTask | null>("DevToolsService.GetUVInstall", (project: string) => [project]),
+  getUVInstall: bind<[string], ToolInstallTask | null>("DevToolsService.GetUVInstall", (project: string) => [project]),
   /** StartProjectUVUninstall removes the managed uv installation from a project. */
-  startProjectUVUninstall: bind<[string], UVInstallTask>("DevToolsService.StartProjectUVUninstall", (project: string) => [project]),
+  startProjectUVUninstall: bind<[string], ToolInstallTask>("DevToolsService.StartProjectUVUninstall", (project: string) => [project]),
   /** StartProjectUVUpdate checks for and installs the latest project uv release. */
-  startProjectUVUpdate: bind<[string], UVInstallTask>("DevToolsService.StartProjectUVUpdate", (project: string) => [project]),
+  startProjectUVUpdate: bind<[string], ToolInstallTask>("DevToolsService.StartProjectUVUpdate", (project: string) => [project]),
+  /** StartToolInstall starts the supported installation for a tool. */
+  startToolInstall: bind<[InstallTool], ToolInstallTask>("DevToolsService.StartToolInstall", (tool: InstallTool) => [tool]),
   /** StartUVInstall starts a uv installation or returns the active task in this scope. */
-  startUVInstall: bind<[string], UVInstallTask>("DevToolsService.StartUVInstall", (project: string) => [project]),
+  startUVInstall: bind<[string], ToolInstallTask>("DevToolsService.StartUVInstall", (project: string) => [project]),
+  /** StartWinGetUpdate updates the current user's App Installer to a newer stable release. */
+  startWinGetUpdate: bind<[], ToolInstallTask>("DevToolsService.StartWinGetUpdate", () => []),
 } as const;
 
 export const ProjectDialog = {
   createDefaultDirectory: bind<[], string>("ProjectDialog.CreateDefaultDirectory", () => []),
   defaultDirectory: bind<[], string>("ProjectDialog.DefaultDirectory", () => []),
-  openDefaultDirectory: bind<[], void>("ProjectDialog.OpenDefaultDirectory", () => []),
-  openDirectory: bind<[string], void>("ProjectDialog.OpenDirectory", (path: string) => [path]),
+  openDefaultDirectory: bind<[], string>("ProjectDialog.OpenDefaultDirectory", () => []),
   selectDirectory: bind<[], string>("ProjectDialog.SelectDirectory", () => []),
   validateDirectory: bind<[string], void>("ProjectDialog.ValidateDirectory", (path: string) => [path]),
 } as const;

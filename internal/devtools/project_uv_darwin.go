@@ -20,22 +20,22 @@ import (
 	"golang.org/x/sys/unix"
 )
 
-func (s *Service) manageProjectUV(ctx context.Context, project string, job *uvInstallJob) (UVInstallStatus, string) {
+func (s *Service) manageProjectUV(ctx context.Context, project string, job *toolInstallJob) (ToolInstallStatus, string) {
 	message, err := s.applyProjectUV(ctx, project, job)
 	if err != nil {
-		return uvInstallFailed, fmt.Sprintf("项目 uv 操作未完成（%v）。", err)
+		return installFailed, fmt.Sprintf("项目 uv 操作未完成（%v）。", err)
 	}
-	return uvInstalled, message
+	return installSucceeded, message
 }
 
-func (s *Service) applyProjectUV(ctx context.Context, project string, job *uvInstallJob) (string, error) {
+func (s *Service) applyProjectUV(ctx context.Context, project string, job *toolInstallJob) (string, error) {
 	root, err := projectdir.Open(project)
 	if err != nil {
 		return "", err
 	}
 	defer root.Close()
 	action := job.task.Action
-	if action == uvInstallAction {
+	if action == installAction {
 		if current := readProjectUV(ctx, root); current.Status != statusNotFound {
 			if current.Status == statusAvailable {
 				return "项目 uv 已可用。", nil
@@ -43,17 +43,17 @@ func (s *Service) applyProjectUV(ctx context.Context, project string, job *uvIns
 			return "", errors.New(current.Message)
 		}
 	}
-	tools, err := projectdir.Tools(root, action == uvInstallAction)
+	tools, err := projectdir.Tools(root, action == installAction)
 	if err != nil {
 		return "", err
 	}
 	defer tools.Close()
 
-	install := &s.uvInstall
+	install := &s.installation
 	var current *os.Root
 	var original projectUVSnapshot
 	var currentVersion string
-	if action != uvInstallAction {
+	if action != installAction {
 		current, err = projectdir.OpenChild(tools, "uv", false)
 		if errors.Is(err, fs.ErrNotExist) {
 			return "", errors.New("当前项目未安装 uv")
@@ -72,7 +72,7 @@ func (s *Service) applyProjectUV(ctx context.Context, project string, job *uvIns
 	}
 
 	stageName := ".uv-" + rand.Text()
-	if action == uvUninstallAction {
+	if action == uninstallAction {
 		if err := install.commitProjectUV(ctx, project, tools, current, original, job, stageName); err != nil {
 			return "", err
 		}
@@ -103,7 +103,7 @@ func (s *Service) applyProjectUV(ctx context.Context, project string, job *uvIns
 	return "项目 uv 已可用。", nil
 }
 
-func (install *uvInstallation) stageProjectUV(ctx context.Context, tools *os.Root, stageName, currentVersion string, job *uvInstallJob) (*os.Root, error) {
+func (install *toolInstallation) stageProjectUV(ctx context.Context, tools *os.Root, stageName, currentVersion string, job *toolInstallJob) (*os.Root, error) {
 	client, err := install.downloadClient(ctx)
 	if err != nil {
 		return nil, err
@@ -172,7 +172,7 @@ func writeUVFiles(ctx context.Context, stage *os.Root, bin, version string) erro
 	return stage.WriteFile(uvRecordName, recordBytes, 0644)
 }
 
-func (install *uvInstallation) commitProjectUV(ctx context.Context, project string, tools, current *os.Root, original projectUVSnapshot, job *uvInstallJob, stageName string) error {
+func (install *toolInstallation) commitProjectUV(ctx context.Context, project string, tools, current *os.Root, original projectUVSnapshot, job *toolInstallJob, stageName string) error {
 	if current != nil {
 		install.updateMessage(job, "正在复核项目 uv 文件…")
 		if err := verifyUVSnapshot(ctx, current, original); err != nil {
@@ -190,16 +190,14 @@ func (install *uvInstallation) commitProjectUV(ctx context.Context, project stri
 
 	from, to, flags := stageName, "uv", uint32(unix.RENAME_EXCL)
 	switch job.task.Action {
-	case uvUpdateAction:
+	case updateAction:
 		flags = unix.RENAME_SWAP
-	case uvUninstallAction:
+	case uninstallAction:
 		from, to = to, from
 	}
 
-	install.mu.Lock()
-	defer install.mu.Unlock()
-	if err := ctx.Err(); err != nil {
-		return err
+	if !install.closeCancellation(ctx, job, "正在提交项目 uv 操作…") {
+		return ctx.Err()
 	}
 	if err := unix.RenameatxNp(int(dir.Fd()), from, int(dir.Fd()), to, flags); err != nil {
 		if errors.Is(err, fs.ErrExist) {
@@ -207,8 +205,6 @@ func (install *uvInstallation) commitProjectUV(ctx context.Context, project stri
 		}
 		return err
 	}
-	job.committed = true
-	job.task.Message = "正在完成项目 uv 操作…"
 	return nil
 }
 

@@ -8,6 +8,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"strings"
 )
 
@@ -16,25 +17,32 @@ var javascriptVersion = regexp.MustCompile(`^v?[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-
 // DetectNPM returns cached or newly detected npm installations.
 func (s *Service) DetectNPM(ctx context.Context, refresh bool) ([]ToolDetection, error) {
 	return s.npm.Read(ctx, refresh, 0, func(ctx context.Context) ([]ToolDetection, error) {
+		location := s.homebrewPaths.location(toolNPM)
 		return detectNodeTool(ctx, "npm", "在已检查的路径中没有找到 npm。",
-			func(ctx context.Context, path string) ToolDetection {
+			location.probe(func(ctx context.Context, path string) ToolDetection {
 				return probePackageManagerVersion(ctx, "npm", path)
-			})
+			}), location.paths(nil)...)
 	})
 }
 
 // DetectPNPM returns cached or newly detected pnpm installations.
 func (s *Service) DetectPNPM(ctx context.Context, refresh bool) ([]ToolDetection, error) {
 	return s.pnpm.Read(ctx, refresh, 0, func(ctx context.Context) ([]ToolDetection, error) {
-		paths := macOSBinPaths("pnpm")
+		location := s.homebrewPaths.location(toolPNPM)
+		paths := location.paths(macOSBinPaths("pnpm"))
+		if runtime.GOOS == "linux" {
+			if dir := userBinDir(); dir != "" {
+				paths = append(paths, filepath.Join(dir, "pnpm"))
+			}
+		}
 		if dir := os.Getenv("PNPM_HOME"); filepath.IsAbs(dir) {
 			paths = append(paths, filepath.Join(dir, "pnpm"))
 		}
 		return detectTools(ctx, "pnpm", "在已检查的路径中没有找到 pnpm。",
-			func(ctx context.Context, path string) ToolDetection {
+			location.probe(func(ctx context.Context, path string) ToolDetection {
 				return probePackageManagerVersion(ctx, "pnpm", path,
 					"npm_config_manage_package_manager_versions=false", "pnpm_config_pm_on_fail=ignore")
-			}, paths...)
+			}), paths...)
 	})
 }
 

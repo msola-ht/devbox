@@ -7,8 +7,8 @@ import (
 	"strings"
 )
 
-// HomebrewEnvironment applies the saved proxy mode to a Homebrew subprocess.
-func HomebrewEnvironment(ctx context.Context, service *Service) ([]string, error) {
+// CommandEnvironment applies the saved proxy mode to an installer subprocess.
+func CommandEnvironment(ctx context.Context, service *Service) ([]string, error) {
 	settings, err := service.Get(ctx)
 	if err != nil {
 		return nil, err

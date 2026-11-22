@@ -110,7 +110,7 @@ func findToolCandidates(ctx context.Context, name string, extraPaths []string) [
 		}
 	}
 
-	for _, path := range extraPaths {
+	for _, path := range append(extraPaths, platformCommandPaths(name)...) {
 		if ctx.Err() != nil {
 			return nil
 		}

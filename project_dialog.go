@@ -25,21 +25,12 @@ func (projectDialog) ValidateDirectory(path string) error {
 	return root.Close()
 }
 
-func (projectDialog) OpenDefaultDirectory() error {
+func (projectDialog) OpenDefaultDirectory() (string, error) {
 	path, err := projectdir.EnsureDefault()
 	if err != nil {
-		return err
+		return "", err
 	}
-	return mygo.Shell.OpenPath(path)
-}
-
-func (projectDialog) OpenDirectory(path string) error {
-	root, err := projectdir.Open(path)
-	if err != nil {
-		return err
-	}
-	defer root.Close()
-	return mygo.Shell.OpenPath(root.Name())
+	return path, mygo.Shell.OpenPath(path)
 }
 
 func (projectDialog) SelectDirectory() (string, error) {

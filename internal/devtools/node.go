@@ -5,28 +5,31 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strings"
+	"time"
 )
 
 // DetectNode returns cached or newly detected Node.js installations.
 func (s *Service) DetectNode(ctx context.Context, refresh bool) ([]ToolDetection, error) {
-	return s.node.Read(ctx, refresh, 0, detectNode)
+	return s.node.Read(ctx, refresh, 0, s.detectNode)
 }
 
-func detectNode(ctx context.Context) ([]ToolDetection, error) {
+func (s *Service) detectNode(ctx context.Context) ([]ToolDetection, error) {
+	location := s.homebrewPaths.location(toolNode)
 	return detectNodeTool(ctx, "node", "在已检查的路径中没有找到 Node.js。",
-		func(ctx context.Context, path string) ToolDetection {
+		location.probe(func(ctx context.Context, path string) ToolDetection {
 			output, err := runJavaScriptVersion(ctx, path, nil)
 			return javascriptVersionDetection(path, output, err)
-		})
+		}), location.paths(nil)...)
 }
 
-func detectNodeTool(ctx context.Context, name, notFoundMessage string, probe func(context.Context, string) ToolDetection) ([]ToolDetection, error) {
+func detectNodeTool(ctx context.Context, name, notFoundMessage string, probe func(context.Context, string) ToolDetection, added ...string) ([]ToolDetection, error) {
 	var stores []nodeVersionStore
 	discover := func(ctx context.Context) []toolCandidate {
 		stores = nodeVersionStores(ctx)
 		paths := append(macOSBinPaths(name), nodeInstallations(ctx, stores, name)...)
-		return findToolCandidates(ctx, name, paths)
+		return findToolCandidates(ctx, name, append(paths, added...))
 	}
 	return detectCandidates(ctx, notFoundMessage, discover, func(ctx context.Context, path string) ToolDetection {
 		result := probe(ctx, path)
@@ -85,7 +88,7 @@ func nodeVersionStores(ctx context.Context) []nodeVersionStore {
 		add(filepath.Join(root, "node-versions"), fnmBinDir, sourceFNM)
 	}
 
-	for _, cellar := range homebrewCellars() {
+	for _, cellar := range nodeHomebrewCellars(ctx) {
 		if ctx.Err() != nil {
 			break
 		}
@@ -97,6 +100,28 @@ func nodeVersionStores(ctx context.Context) []nodeVersionStore {
 		}
 	}
 	return stores
+}
+
+func nodeHomebrewCellars(ctx context.Context) []string {
+	cellars := homebrewCellars()
+	if runtime.GOOS != "darwin" {
+		return cellars
+	}
+	queryCtx, cancel := context.WithTimeout(ctx, time.Second)
+	defer cancel()
+	for _, candidate := range findToolCandidates(queryCtx, "brew", macOSBinPaths("brew")) {
+		if candidate.err != nil || queryCtx.Err() != nil {
+			continue
+		}
+		output, err := runCommand(queryCtx, candidate.path, []string{"--cellar"})
+		if cellar := firstOutputLine(output); err == nil && filepath.IsAbs(cellar) {
+			if !slices.Contains(cellars, cellar) {
+				cellars = append(cellars, cellar)
+			}
+			break
+		}
+	}
+	return cellars
 }
 
 func nodeInstallations(ctx context.Context, stores []nodeVersionStore, name string) []string {

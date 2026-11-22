@@ -83,14 +83,12 @@ export function ToolResultsDialog({
 export function ToolResult({
   result,
   compact = false,
-  project = false,
 }: {
   result: ToolDetection;
   compact?: boolean;
-  project?: boolean;
 }) {
   if (compact && result.status === "not_found") {
-    if (!result.path) return <span>{project ? result.message : statusLabels.not_found}</span>;
+    if (!result.path) return <span>{statusLabels.not_found}</span>;
     return (
       <Tooltip>
         <TooltipTrigger render={<span tabIndex={0} />}>
